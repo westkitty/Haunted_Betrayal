@@ -1,3 +1,351 @@
+/* Art-directed finishing pass: aged brass, oxblood velvet, and readable candlelit glass. */
+:root {
+  --gold: #c3a16b;
+  --gold2: #e6cc98;
+  --dim: #a0988d;
+  --panel: #1b1919;
+}
+
+.game-shell.immersive {
+  background: radial-gradient(
+    ellipse at 50% 45%,
+    #252327 0%,
+    #151516 66%,
+    #0d0d0f 100%
+  );
+}
+.game-shell.immersive .center-stage {
+  background: transparent;
+}
+.game-shell.immersive .stage-wrap {
+  background: radial-gradient(
+    ellipse at 50% 48%,
+    #313137 0%,
+    #1a1b20 62%,
+    #111215 100%
+  );
+  isolation: isolate;
+}
+.game-shell.immersive .stage-wrap::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      #07070832,
+      transparent 22%,
+      transparent 78%,
+      #07070855
+    ),
+    radial-gradient(ellipse at 50% 48%, transparent 48%, #06070845 100%);
+}
+.game-shell.immersive .stage {
+  filter: saturate(0.94) contrast(1.035);
+}
+.game-shell.immersive .stage canvas {
+  position: relative;
+  z-index: 0;
+}
+.game-shell.immersive .scene-caption,
+.game-shell.immersive .controls-hint,
+.game-shell.immersive .walk-controls,
+.game-shell.immersive .doorway-nav,
+.game-shell.immersive .mini-map {
+  z-index: 2;
+}
+.game-shell.immersive .scene-caption,
+.game-shell.immersive .controls-hint,
+.game-shell.immersive .camera-controls,
+.game-shell.immersive .doorway-nav button,
+.game-shell.immersive .mini-map {
+  border-color: #c9ab7652;
+  background-color: #171513c9;
+  box-shadow:
+    0 8px 28px #0005,
+    inset 0 1px #ffffff10;
+  backdrop-filter: blur(10px) saturate(0.8);
+}
+.game-shell.immersive .doorway-nav button {
+  border-radius: 3px;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.game-shell.immersive .doorway-nav button:hover:not(:disabled) {
+  transform: translateX(3px);
+  box-shadow:
+    0 4px 18px #0007,
+    inset 0 0 18px #d4ad6720;
+}
+.game-shell.immersive .walk-controls button,
+.game-shell.immersive .camera-controls button {
+  border-radius: 4px;
+  background: linear-gradient(145deg, #2c2823dd, #171616e8);
+  box-shadow:
+    0 4px 14px #0007,
+    inset 0 1px #fff1;
+  transition:
+    transform 120ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+.game-shell.immersive .walk-controls button:active,
+.game-shell.immersive .camera-controls button:active {
+  transform: translateY(1px) scale(0.96);
+}
+.game-shell.immersive .walk-controls button:hover,
+.game-shell.immersive .camera-controls button:hover {
+  border-color: var(--gold2);
+  color: #fff0d0;
+}
+.game-shell.immersive .action-bar {
+  background: linear-gradient(180deg, #211f1e, #171617);
+  box-shadow: 0 -12px 40px #0005;
+}
+.game-shell.immersive .action-button {
+  border-radius: 4px;
+  background: linear-gradient(145deg, #2c2927, #211f1e);
+  box-shadow:
+    inset 0 1px #ffffff0c,
+    0 3px 12px #0003;
+  transition:
+    transform 150ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+.game-shell.immersive .action-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: #d0ad72;
+  background: linear-gradient(145deg, #393128, #25211e);
+  box-shadow:
+    inset 0 1px #ffffff12,
+    0 8px 22px #0005;
+}
+.game-shell.immersive .action-button:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+}
+.game-shell.immersive .left-rail,
+.game-shell.immersive .right-rail {
+  background:
+    linear-gradient(155deg, #282322f7, #191819fa 68%),
+    radial-gradient(ellipse at 15% 0%, #80604422, transparent 60%);
+  border-color: #9c805444;
+  backdrop-filter: blur(16px) saturate(0.82);
+}
+.immersive-toggle {
+  width: 34px;
+  height: 34px;
+  opacity: 0.42;
+  border-color: #e5cb9380;
+  box-shadow:
+    0 3px 14px #0006,
+    inset 0 1px #fff2;
+}
+.immersive-toggle:hover,
+.immersive-toggle:focus-visible,
+.hud-open .immersive-toggle {
+  transform: scale(1.04);
+  box-shadow:
+    0 0 18px #d2b47a40,
+    0 3px 14px #0008;
+}
+
+/* Carry the same engraved-paper language through character selection and story overlays. */
+.character-card {
+  overflow: hidden;
+  border-radius: 4px;
+  background:
+    linear-gradient(115deg, #272222, #191819 68%),
+    radial-gradient(ellipse at 0 0, #ad8b5d14, transparent 65%);
+  box-shadow:
+    inset 0 1px #ffffff08,
+    0 7px 22px #0002;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.character-card:hover {
+  transform: translateY(-3px);
+}
+.character-card.selected {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 32px #c4a36a0c,
+    0 0 0 1px #c6a46e33,
+    0 12px 32px #0005;
+}
+.portrait {
+  box-shadow: inset -12px 0 24px #08080966;
+}
+.portrait::before {
+  box-shadow:
+    0 10px 0 13px #272328,
+    inset 5px 3px 10px #ffffff27,
+    0 0 22px #d3b17b22;
+}
+.p0::before {
+  border-radius: 42% 42% 45% 45%;
+  box-shadow:
+    0 10px 0 13px #25262b,
+    0 -6px 0 8px #302822,
+    inset 5px 3px 10px #ffffff27;
+}
+.p1::before {
+  border-radius: 48% 48% 34% 34%;
+  box-shadow:
+    0 10px 0 16px #293b3b,
+    inset 5px 3px 10px #ffffff27,
+    0 0 20px #95c2c733;
+}
+.p2::before {
+  border-radius: 44% 44% 40% 40%;
+  box-shadow:
+    0 10px 0 13px #32261e,
+    0 -12px 0 12px #29211b,
+    0 -17px 0 20px #211b17,
+    inset 5px 3px 10px #ffffff27;
+}
+.p3::before {
+  border-radius: 44% 44% 40% 40%;
+  box-shadow:
+    0 10px 0 13px #31262b,
+    0 -9px 0 12px #ddd2bc,
+    inset 5px 3px 10px #ffffff27;
+}
+.p4::before {
+  border-radius: 44% 44% 40% 40%;
+  box-shadow:
+    0 10px 0 13px #27242a,
+    0 -18px 0 15px #18181c,
+    0 -20px 0 23px #18181c,
+    inset 5px 3px 10px #ffffff27;
+}
+.p5::before {
+  border-radius: 44% 44% 40% 40%;
+  box-shadow:
+    0 10px 0 13px #30352b,
+    0 -5px 0 10px #322a24,
+    inset 5px 3px 10px #ffffff27;
+}
+.event-card {
+  overflow: hidden;
+  border-radius: 3px;
+  background:
+    radial-gradient(ellipse at 15% 0%, #fff8e81c, transparent 55%),
+    repeating-linear-gradient(0deg, #65533a06 0 1px, transparent 1px 5px),
+    linear-gradient(135deg, #f0e8da, #d9cebd);
+  box-shadow:
+    0 26px 90px #000c,
+    inset 0 1px #fff8;
+  animation: card-arrive 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.event-art {
+  background:
+    radial-gradient(ellipse at 50% 45%, #a2814d30, transparent 32%),
+    radial-gradient(ellipse at 50% 50%, #3a3330, #1a191b 72%);
+}
+.event-art::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border: 1px solid #b89c6338;
+  box-shadow: inset 0 0 32px #c8a86a0a;
+  pointer-events: none;
+}
+.choice-list button {
+  border-radius: 2px;
+  transition:
+    transform 150ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.choice-list button:hover {
+  transform: translateX(2px);
+  box-shadow: 0 3px 12px #58462a20;
+}
+.choice-list button:active {
+  transform: translateX(1px) scale(0.99);
+}
+.choice-list button:focus-visible {
+  outline-color: #8c6a3c;
+}
+.revelation-ribbon,
+.ending-card,
+.modal {
+  border-radius: 4px;
+  box-shadow:
+    0 24px 90px #000c,
+    inset 0 1px #ffffff0c;
+}
+.revelation-ribbon {
+  background:
+    radial-gradient(ellipse at 50% 0, #9b704233, transparent 72%),
+    linear-gradient(130deg, #291e1d, #171516);
+}
+.ending-card {
+  position: relative;
+  overflow: hidden;
+}
+.ending-card::before {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border: 1px solid #c0a27524;
+  pointer-events: none;
+}
+.modal {
+  background:
+    radial-gradient(ellipse at 10% 0, #8f6b4022, transparent 52%),
+    linear-gradient(145deg, #272321, #1b1918);
+}
+.primary-btn,
+.secondary-btn,
+.network-btn,
+.modal button,
+.top-action {
+  transition:
+    transform 150ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.primary-btn:active:not(:disabled),
+.secondary-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+}
+
+@keyframes card-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Hand-painted portraits unify roster selection and the in-play explorer drawer. */
 .portrait.p0,
 .avatar-portrait.p0 {
