@@ -1288,7 +1288,9 @@ export default function Stage({
       pos[i * 3 + 2] = (Math.random() - 0.5) * 24;
       dustDrift[i] = 0.035 + Math.random() * 0.07;
     }
-    dustGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const dustPosition = new THREE.BufferAttribute(pos, 3);
+    dustPosition.setUsage(THREE.DynamicDrawUsage);
+    dustGeo.setAttribute("position", dustPosition);
     const dust = new THREE.Points(
       dustGeo,
       new THREE.PointsMaterial({
@@ -1751,8 +1753,6 @@ export default function Stage({
       window.removeEventListener("keydown", keydown);
       window.removeEventListener("keyup", keyup);
       window.removeEventListener("blur", clearHeld);
-      renderer.dispose();
-      dustGeo.dispose();
       renderer.domElement.removeEventListener("pointerdown", down);
       renderer.domElement.removeEventListener("pointermove", move);
       renderer.domElement.removeEventListener("pointerleave", leaveCanvas);
@@ -1761,13 +1761,19 @@ export default function Stage({
       renderer.domElement.removeEventListener("dblclick", doubleClick);
       renderer.domElement.removeEventListener("wheel", wheel);
       if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
+      const geometries = new Set<THREE.BufferGeometry>();
+      const materials = new Set<THREE.Material>();
       scene.traverse((o) => {
-        if (o instanceof THREE.Mesh) {
-          o.geometry.dispose();
-          if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
-          else o.material.dispose();
+        if (o instanceof THREE.Mesh || o instanceof THREE.Points) {
+          geometries.add(o.geometry);
+          if (Array.isArray(o.material))
+            o.material.forEach((m) => materials.add(m));
+          else materials.add(o.material);
         }
       });
+      geometries.forEach((geometry) => geometry.dispose());
+      materials.forEach((material) => material.dispose());
+      renderer.dispose();
     };
   }, [
     layoutKey,
