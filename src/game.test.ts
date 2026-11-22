@@ -35,6 +35,37 @@ describe("house rules engine", () => {
     expect(s.ap).toBe(2);
     expect(s.rooms[2].links).toContain(s.rooms[0].id);
   });
+  it("allows directional exploration while rejecting occupied or invalid exits", () => {
+    let s = newGame(314);
+    const current = s.rooms.find(
+      (room) => room.id === s.players[s.current].roomId,
+    )!;
+    const directions = {
+      east: [1, 0],
+      west: [-1, 0],
+      south: [0, 1],
+      north: [0, -1],
+    } as const;
+    const free = Object.entries(directions).find(
+      ([, [dx, dy]]) =>
+        !s.rooms.some(
+          (room) =>
+            room.floor === current.floor &&
+            room.x === current.x + dx &&
+            room.y === current.y + dy,
+        ),
+    )!;
+    const ap = s.ap;
+    const roomCount = s.rooms.length;
+    expect(act(s, "explore", "diagonal").ap).toBe(ap);
+    s = act(s, "explore", free[0]);
+    expect(s.rooms).toHaveLength(roomCount + 1);
+    expect(s.rooms[s.rooms.length - 1]).toMatchObject({
+      x: current.x + free[1][0],
+      y: current.y + free[1][1],
+      floor: current.floor,
+    });
+  });
   it("resolves event decisions and changes fear, flags or clues", () => {
     let s = newGame(24);
     s = act(s, "explore");
@@ -48,15 +79,14 @@ describe("house rules engine", () => {
   });
   it("blocks game actions behind encounters and lets past promises echo", () => {
     let s = newGame(44);
+    s.flags.push("broken-promise");
     s = act(s, "explore");
-    expect(s.event).not.toBeNull();
+    expect(s.event?.text).toContain("refused before");
     const frozen = act(s, "search");
     expect(frozen.rooms).toHaveLength(s.rooms.length);
     expect(frozen.ap).toBe(s.ap);
     s = act(s, "resolve", s.event!.choices[1].label);
-    s.flags.push("broken-promise");
-    s = act(s, "explore");
-    expect(s.event?.text).toContain("refused before");
+    expect(s.event).toBeNull();
   });
 
   it("saves and restores a versioned expedition", () => {

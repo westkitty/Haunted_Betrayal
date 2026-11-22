@@ -583,6 +583,13 @@ function availableSlot(s: GameState, from: Room) {
 function maybeEvent(s: GameState, room: Room) {
   if (room.eventDone || s.event) return;
   room.eventDone = true;
+  const promiseEcho =
+    s.flags.includes("broken-promise") && !s.flags.includes("promise-recalled");
+  const encounterChance = Math.min(
+    0.66,
+    0.28 + s.pressure * 0.035 + s.attention * 0.018,
+  );
+  if (!promiseEcho && rand(s) > encounterChance) return;
   const pool = EVENT_DEFS.filter((e) => !s.flags.includes(`event:${e.id}`));
   let def = pool[Math.floor(rand(s) * pool.length)] || EVENT_DEFS[0];
   let text = def.text;
@@ -675,7 +682,26 @@ export function act(s: GameState, action: string, payload?: string): GameState {
     if (n.phase !== "play" || n.ap < 1) return n;
     const p = n.players[n.current],
       from = n.rooms.find((r) => r.id === p.roomId)!;
-    const slot = availableSlot(n, from);
+    const offsets: Record<string, [number, number]> = {
+      east: [1, 0],
+      west: [-1, 0],
+      south: [0, 1],
+      north: [0, -1],
+    };
+    const offset = payload ? offsets[payload] : undefined;
+    if (payload && !offset) return n;
+    const requested = offset
+      ? { x: from.x + offset[0], y: from.y + offset[1] }
+      : null;
+    if (
+      requested &&
+      n.rooms.some(
+        (r) =>
+          r.floor === from.floor && r.x === requested.x && r.y === requested.y,
+      )
+    )
+      return n;
+    const slot = requested || availableSlot(n, from);
     if (!slot) {
       log(
         n,

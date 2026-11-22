@@ -13,7 +13,7 @@ npm run dev
 
 ## Play
 
-Choose an explorer and optional numeric seed. Open doors to reveal rooms, search for clues and supplies, resolve the house's encounters, and watch for three omens to trigger the Revelation. The HUD is intentionally tucked away: use the Explorer and The House buttons for optional detail drawers.
+Choose an explorer and optional numeric seed. Open doors to reveal rooms, search for clues and supplies, resolve the house's encounters, and watch for three omens to trigger the Revelation. The play HUD is hidden by default. Tap the tiny three-dot seal or press F1 / ? to reveal it; Explorer and House detail drawers are opt-in.
 
 **Controls:** WASD or arrow keys move relative to camera; hold Shift to hurry; drag to orbit; scroll or +/- to zoom; R recenters; E opens a new door; Q searches; M switches to dollhouse; number keys 1–4 enter a listed connected room. Touch players can use the on-screen directional pad and camera buttons. The live hint strip shows the relevant shortcuts. In the dollhouse, click a connected room to enter it. Walls facing the camera fold down; the dollhouse view lowers all walls for legibility.
 

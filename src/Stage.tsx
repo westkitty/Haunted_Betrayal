@@ -143,7 +143,7 @@ function makeRoom(
   room: any,
   center: THREE.Vector3,
   scene: THREE.Object3D,
-  openSides: Set<string>,
+  doorTargets: Record<string, string>,
   illuminate: boolean,
 ) {
   const group = new THREE.Group();
@@ -193,7 +193,7 @@ function makeRoom(
       ? box(doorWidth + 0.14, 0.18, 0.16, gold, 0, h - 0.08, edgePos)
       : box(0.16, 0.18, doorWidth + 0.14, gold, edgePos, h - 0.08, 0);
     addCutawayWall(group, side, lintel, 0.18);
-    if (!openSides.has(side)) {
+    if (!doorTargets[side]) {
       const leaf = zSide
         ? box(
             doorWidth - 0.12,
@@ -249,6 +249,27 @@ function makeRoom(
           : box(0.46, 0.06, doorWidth, gold, edgePos - sideSign * 0.2, 0.12, 0),
       );
     }
+    const doorHit = new THREE.Mesh(
+      new THREE.PlaneGeometry(doorWidth, 2.25),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        colorWrite: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    if (zSide) doorHit.position.set(0, 1.15, edgePos);
+    else {
+      doorHit.rotation.y = Math.PI / 2;
+      doorHit.position.set(edgePos, 1.15, 0);
+    }
+    doorHit.userData.doorHit = true;
+    doorHit.userData.roomId = room.id;
+    doorHit.userData.doorSide = side;
+    doorHit.userData.doorTarget = doorTargets[side] || null;
+    group.add(doorHit);
   }
   // Brass skirting, ceiling cornice, and repeated wall pilasters give rooms a common architectural language.
   for (const side of ["north", "south", "east", "west"]) {
@@ -744,12 +765,16 @@ export default function Stage({
   onToggleMode,
   onExplore,
   onSearch,
+  onEndTurn,
+  hudOpen,
 }: {
   state: GameState;
   onMove: (room: string) => void;
   onToggleMode: () => void;
-  onExplore: () => void;
+  onExplore: (direction?: string) => void;
   onSearch: () => void;
+  onEndTurn: () => void;
+  hudOpen: boolean;
 }) {
   const mount = useRef<HTMLDivElement>(null);
   const drag = useRef({ active: false, x: 0, y: 0, theta: 0, phi: 0.9 });
@@ -814,6 +839,13 @@ export default function Stage({
     const mansion = new THREE.Group();
     scene.add(mansion);
     const roomsById = new Map<string, THREE.Group>();
+    const cutawayMeshes: THREE.Mesh[] = [];
+    const doorMeshes: THREE.Mesh[] = [];
+    const raycaster = new THREE.Raycaster();
+    const pointerNdc = new THREE.Vector2(2, 2);
+    let pointerDirty = false,
+      pointerOnCanvas = false;
+    let hoveredWall: THREE.Object3D | null = null;
     const gap = 5.3;
     const bounds = {
       minX: Math.min(...state.rooms.map((r) => r.x)),
@@ -863,20 +895,20 @@ export default function Stage({
       knownSeed.current = state.seed;
     }
     for (const r of state.rooms) {
-      const openSides = new Set<string>();
+      const doorTargets: Record<string, string> = {};
       for (const id of r.links) {
         const linked = state.rooms.find((room) => room.id === id);
-        if (!linked) continue;
-        if (linked.x > r.x) openSides.add("east");
-        if (linked.x < r.x) openSides.add("west");
-        if (linked.y > r.y) openSides.add("south");
-        if (linked.y < r.y) openSides.add("north");
+        if (!linked || linked.floor !== r.floor) continue;
+        if (linked.x > r.x) doorTargets.east = linked.id;
+        if (linked.x < r.x) doorTargets.west = linked.id;
+        if (linked.y > r.y) doorTargets.south = linked.id;
+        if (linked.y < r.y) doorTargets.north = linked.id;
       }
       const g = makeRoom(
         r,
         coords(r),
         mansion,
-        openSides,
+        doorTargets,
         r.id === activeRoomId,
       );
       if (!knownRooms.current.has(r.id) && !state.settings.reducedMotion) {
@@ -885,6 +917,10 @@ export default function Stage({
       }
       knownRooms.current.add(r.id);
       roomsById.set(r.id, g);
+      for (const part of g.children) {
+        if (part.userData.cutaway) cutawayMeshes.push(part as THREE.Mesh);
+        if (part.userData.doorHit) doorMeshes.push(part as THREE.Mesh);
+      }
     }
     for (const r of state.rooms) {
       for (const id of r.links) {
@@ -1204,6 +1240,18 @@ export default function Stage({
       );
       camera.position.lerp(desiredCam, 0.045);
       camera.lookAt(target);
+      if (pointerDirty || drag.current.active) {
+        if (pointerOnCanvas) {
+          camera.updateMatrixWorld(true);
+          mansion.updateMatrixWorld(true);
+          raycaster.setFromCamera(pointerNdc, camera);
+          const hit = raycaster
+            .intersectObjects(cutawayMeshes, false)
+            .find((i) => i.object.visible && i.object.scale.y > 0.08);
+          hoveredWall = hit?.object || null;
+        } else hoveredWall = null;
+        pointerDirty = false;
+      }
       for (const roomGroup of roomsById.values()) {
         if (roomGroup.userData.revealScale) {
           const nextScale =
@@ -1237,7 +1285,9 @@ export default function Stage({
             { side: string; baseY: number; height: number } | undefined;
           if (!cut) continue;
           const shouldFold =
-            state.mode === "dollhouse" || cut.side === frontSide;
+            state.mode === "dollhouse" ||
+            cut.side === frontSide ||
+            part === hoveredWall;
           const foldedScale = shouldFold ? 0.025 : 1;
           const foldEase = state.settings.reducedMotion ? 1 : 0.16;
           part.scale.y += (foldedScale - part.scale.y) * foldEase;
@@ -1303,6 +1353,11 @@ export default function Stage({
         }
         return;
       }
+      if ((key === "enter" || key === " ") && !state.event) {
+        e.preventDefault();
+        onEndTurn();
+        return;
+      }
       if (key === "r") {
         cameraActions.current.home();
         return;
@@ -1346,15 +1401,35 @@ export default function Stage({
       renderer.setSize(el.clientWidth, el.clientHeight);
     };
     window.addEventListener("resize", resize);
+    let pressX = 0,
+      pressY = 0;
     const down = (e: PointerEvent) => {
       if (e.button !== 0) return;
       renderer.domElement.focus();
+      pressX = e.clientX;
+      pressY = e.clientY;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointerNdc.set(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
       drag.current.active = true;
       drag.current.x = e.clientX;
       drag.current.y = e.clientY;
       renderer.domElement.setPointerCapture(e.pointerId);
     };
     const move = (e: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointerNdc.set(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      pointerOnCanvas =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+      pointerDirty = true;
       if (!drag.current.active) return;
       const dx = e.clientX - drag.current.x,
         dy = e.clientY - drag.current.y;
@@ -1365,7 +1440,28 @@ export default function Stage({
       drag.current.theta = angle;
       drag.current.phi = phi;
     };
-    const up = () => (drag.current.active = false);
+    const leaveCanvas = () => {
+      pointerOnCanvas = false;
+      pointerDirty = true;
+      hoveredWall = null;
+    };
+    const up = (e: PointerEvent) => {
+      const wasClick =
+        drag.current.active &&
+        Math.hypot(e.clientX - pressX, e.clientY - pressY) < 6;
+      drag.current.active = false;
+      if (!wasClick) return;
+      camera.updateMatrixWorld(true);
+      mansion.updateMatrixWorld(true);
+      raycaster.setFromCamera(pointerNdc, camera);
+      const roomId = state.players[state.current].roomId;
+      const door = raycaster
+        .intersectObjects(doorMeshes, false)
+        .find((hit) => hit.object.userData.roomId === roomId)?.object;
+      if (!door) return;
+      if (door.userData.doorTarget) onMove(door.userData.doorTarget);
+      else onExplore(door.userData.doorSide);
+    };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
       setZoom(zoom + e.deltaY * 0.012);
@@ -1377,6 +1473,7 @@ export default function Stage({
     const doubleClick = () => cameraActions.current.home();
     renderer.domElement.addEventListener("pointerdown", down);
     renderer.domElement.addEventListener("pointermove", move);
+    renderer.domElement.addEventListener("pointerleave", leaveCanvas);
     renderer.domElement.addEventListener("pointerup", up);
     renderer.domElement.addEventListener("pointercancel", pointerCancel);
     renderer.domElement.addEventListener("dblclick", doubleClick);
@@ -1392,6 +1489,7 @@ export default function Stage({
       dustGeo.dispose();
       renderer.domElement.removeEventListener("pointerdown", down);
       renderer.domElement.removeEventListener("pointermove", move);
+      renderer.domElement.removeEventListener("pointerleave", leaveCanvas);
       renderer.domElement.removeEventListener("pointerup", up);
       renderer.domElement.removeEventListener("pointercancel", pointerCancel);
       renderer.domElement.removeEventListener("dblclick", doubleClick);
@@ -1435,7 +1533,7 @@ export default function Stage({
     onClick: () => step.current(forward, strafe),
   });
   return (
-    <div className="stage-wrap">
+    <div className={`stage-wrap ${hudOpen ? "show-controls" : ""}`}>
       <div className="stage" ref={mount} />
       <div className="scene-caption">
         <span className="live-dot" />{" "}

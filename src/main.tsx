@@ -39,6 +39,7 @@ import {
   Sun,
   Moon,
   Info,
+  MoreHorizontal,
   X,
 } from "lucide-react";
 import "./style.css";
@@ -66,8 +67,18 @@ function App() {
   const [showJournal, setShowJournal] = useState(false);
   const [showExplorer, setShowExplorer] = useState(false);
   const [showHouse, setShowHouse] = useState(false);
+  const [hudOpen, setHudOpen] = useState(false);
   const update = (action: string, payload?: string) =>
     setGame((g) => (g ? act(g, action, payload) : g));
+  const toggleHud = () =>
+    setHudOpen((open) => {
+      if (open) {
+        setShowExplorer(false);
+        setShowHouse(false);
+        setShowJournal(false);
+      }
+      return !open;
+    });
   useEffect(() => {
     if (game) {
       saveGame(game);
@@ -93,15 +104,45 @@ function App() {
     }
   }, [game]);
   useEffect(() => {
-    const onEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setShowExplorer(false);
-      setShowHouse(false);
-      setShowJournal(false);
-      if (screen === "settings") setScreen(game ? "play" : "menu");
+    const onShortcut = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowExplorer(false);
+        setShowHouse(false);
+        setShowJournal(false);
+        setHudOpen(false);
+        if (screen === "settings") setScreen(game ? "play" : "menu");
+        return;
+      }
+      const target = event.target as HTMLElement;
+      if (
+        target?.matches("input,textarea,select,button,[contenteditable=true]")
+      )
+        return;
+      if (event.key === "F1" || event.key === "?") {
+        event.preventDefault();
+        toggleHud();
+        return;
+      }
+      if (event.key.toLowerCase() === "i") {
+        setHudOpen(true);
+        setShowExplorer((open) => !open);
+        setShowHouse(false);
+        return;
+      }
+      if (event.key.toLowerCase() === "h") {
+        setHudOpen(true);
+        setShowHouse((open) => !open);
+        setShowExplorer(false);
+        return;
+      }
+      if (event.key.toLowerCase() === "j") {
+        setHudOpen(true);
+        setShowJournal(true);
+        return;
+      }
     };
-    window.addEventListener("keydown", onEscape);
-    return () => window.removeEventListener("keydown", onEscape);
+    window.addEventListener("keydown", onShortcut);
+    return () => window.removeEventListener("keydown", onShortcut);
   }, [screen, game]);
   const start = () => {
     const s = newGame(
@@ -479,7 +520,7 @@ function App() {
   const danger = game.pressure;
   return (
     <main
-      className={`game-shell ${game.settings.reducedMotion ? "reduce-motion" : ""}`}
+      className={`game-shell immersive ${hudOpen ? "hud-open" : ""} ${game.settings.reducedMotion ? "reduce-motion" : ""}`}
     >
       <header className="game-topbar">
         <button className="brand-mark" onClick={leave}>
@@ -631,6 +672,22 @@ function App() {
           </button>
         </aside>
         <section className="center-stage">
+          <button
+            className="immersive-toggle"
+            aria-label={
+              hudOpen ? "Hide expedition controls" : "Show expedition controls"
+            }
+            aria-expanded={hudOpen}
+            title="Expedition controls · F1 or ?"
+            onClick={() => {
+              toggleHud();
+              requestAnimationFrame(() =>
+                document.querySelector<HTMLCanvasElement>("canvas")?.focus(),
+              );
+            }}
+          >
+            <MoreHorizontal size={17} />
+          </button>
           <div className="scene-header">
             <div>
               <div className="eyebrow">
@@ -669,8 +726,10 @@ function App() {
               state={game}
               onMove={(id) => update("move", id)}
               onToggleMode={() => update("toggle-map")}
-              onExplore={() => update("explore")}
+              onExplore={(direction) => update("explore", direction)}
               onSearch={() => update("search")}
+              onEndTurn={() => update("end-turn")}
+              hudOpen={hudOpen}
             />
           </Suspense>
           <div className="action-bar">
@@ -753,7 +812,7 @@ function App() {
               </button>
             )}
           </div>
-          {game.lastRoll && (
+          {hudOpen && game.lastRoll && (
             <div className="roll-banner">
               <span className="dice">⚄</span>
               <div>
