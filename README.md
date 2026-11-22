@@ -13,11 +13,11 @@ npm run dev
 
 ## Play
 
-Choose an explorer and optional numeric seed. Open doors to reveal rooms, search for clues and supplies, resolve the house's encounters, and watch for three omens to trigger the Revelation. The play HUD is hidden by default. Tap the tiny three-dot seal or press F1 / ? to reveal it; Explorer and House detail drawers are opt-in.
+Choose an explorer and optional numeric seed. Open doors to reveal rooms, search for clues and supplies, resolve the house's encounters, and watch for three omens to trigger the Revelation. Core expedition actions and navigation remain visible during play. Explorer and House detail drawers are opt-in; F1 / ? toggles the additional scene controls.
 
 **Controls:** WASD or arrow keys move relative to camera; hold Shift to hurry; drag to orbit; scroll or +/- to zoom; R recenters; E opens a new door; Q searches; M switches to dollhouse; number keys 1–4 enter a listed connected room. Touch players can use the on-screen directional pad and camera buttons. The live hint strip shows the relevant shortcuts. In the dollhouse, click a connected room to enter it. Walls facing the camera fold down; the dollhouse view lowers all walls for legibility.
 
-The game autosaves locally; export/import expedition saves from the top bar.
+The game autosaves locally; export/import expedition saves from the always-visible top navigation. Imports are validated, limited to 1 MiB (1,048,576 bytes), and require confirmation before replacing the current expedition. Upper-floor and basement room templates are placed on their corresponding levels. Ada gains an extra clue on a successful search; Mara automatically succeeds when investigating Watchers and Mourners. Other explorer profile notes describe their actual stat strengths and limitations.
 
 ## Current scope
 

@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { Crosshair, Minus, Plus } from "lucide-react";
 import type { GameState } from "./game";
+import { collectAnimatedRoomParts } from "./roomAnimation";
 const ROOM_FLOOR_TOP = 0.17;
 const FIGURE_BASE_HEIGHT = 0.08;
 const FIGURE_ROOT_Y = ROOM_FLOOR_TOP + FIGURE_BASE_HEIGHT;
@@ -1099,6 +1100,7 @@ export default function Stage({
   hudOpen: boolean;
 }) {
   const mount = useRef<HTMLDivElement>(null);
+  const [renderError, setRenderError] = useState(false);
   const drag = useRef({ active: false, x: 0, y: 0, theta: 0, phi: 0.9 });
   const walk = useRef({ roomId: "", x: 0, z: 0 });
   const held = useRef(new Set<string>());
@@ -1135,15 +1137,32 @@ export default function Stage({
       0.1,
       120,
     );
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: false,
-      powerPreference: "high-performance",
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: false,
+        powerPreference: "high-performance",
+      });
+      setRenderError(false);
+    } catch {
+      setRenderError(true);
+      return;
+    }
     renderer.domElement.tabIndex = 0;
+    const describedRoom = state.rooms.find(
+      (room) => room.id === state.players[state.current].roomId,
+    );
+    const floorName = describedRoom
+      ? describedRoom.floor < 0
+        ? "basement"
+        : describedRoom.floor > 0
+          ? "upper floor"
+          : "ground floor"
+      : "current floor";
     renderer.domElement.setAttribute(
       "aria-label",
-      "Haunted house room. Use WASD or arrow keys to walk, drag to look, and scroll to zoom.",
+      `3D view of ${describedRoom?.name || "the current room"}, ${floorName}. Use WASD or arrow keys to walk, drag to look, and scroll to zoom. Use the connected-room buttons to enter an exit.`,
     );
     const coarsePointer =
       typeof matchMedia !== "undefined" &&
@@ -1177,6 +1196,10 @@ export default function Stage({
     const mansion = new THREE.Group();
     scene.add(mansion);
     const roomsById = new Map<string, THREE.Group>();
+    const animatedRoomObjects: {
+      group: THREE.Group;
+      parts: THREE.Object3D[];
+    }[] = [];
     const cutawayMeshes: THREE.Mesh[] = [];
     const doorMeshes: THREE.Mesh[] = [];
     const raycaster = new THREE.Raycaster();
@@ -1293,6 +1316,9 @@ export default function Stage({
       }
       knownRooms.current.add(r.id);
       roomsById.set(r.id, g);
+      const animatedParts = collectAnimatedRoomParts(g.children);
+      if (animatedParts.length)
+        animatedRoomObjects.push({ group: g, parts: animatedParts });
       for (const part of g.children) {
         if (part.userData.cutaway) cutawayMeshes.push(part as THREE.Mesh);
         if (part.userData.doorHit) doorMeshes.push(part as THREE.Mesh);
@@ -1717,6 +1743,7 @@ export default function Stage({
     camera.lookAt(target);
     let alive = true;
     let raf = 0;
+    let elapsedTime = 0;
     const clock = new THREE.Clock();
     let velocityX = 0,
       velocityZ = 0;
@@ -1755,9 +1782,10 @@ export default function Stage({
           Math.abs(x - ox) < rx + 0.23 && Math.abs(z - oz) < rz + 0.23,
       );
     const animate = () => {
-      if (!alive) return;
+      if (!alive || document.hidden) return;
       raf = requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.05);
+      elapsedTime += dt;
       if (state.mode === "explore") {
         let forward = 0,
           strafe = 0;
@@ -1807,17 +1835,17 @@ export default function Stage({
         const gait = Math.min(1, pace / 1.25);
         const stride = state.settings.reducedMotion
           ? 0
-          : Math.sin(clock.elapsedTime * 10.5) * gait;
+          : Math.sin(elapsedTime * 10.5) * gait;
         avatar.position.y =
           cp.y +
           FIGURE_ROOT_Y +
           (state.settings.reducedMotion
             ? 0
-            : Math.sin(clock.elapsedTime * 21) * 0.014 * gait +
-              Math.sin(clock.elapsedTime * 1.8) * 0.012);
+            : Math.sin(elapsedTime * 21) * 0.014 * gait +
+              Math.sin(elapsedTime * 1.8) * 0.012);
         body.rotation.z = state.settings.reducedMotion
           ? 0
-          : Math.sin(clock.elapsedTime * 5.2) * 0.018 * gait;
+          : Math.sin(elapsedTime * 5.2) * 0.018 * gait;
         arms[0].rotation.x = stride * 0.38;
         arms[1].rotation.x = -stride * 0.38;
         legs[0].rotation.x = -stride * 0.48;
@@ -1834,37 +1862,37 @@ export default function Stage({
           FIGURE_ROOT_Y +
           (state.settings.reducedMotion
             ? 0
-            : Math.sin(clock.elapsedTime * 1.8) * 0.012);
+            : Math.sin(elapsedTime * 1.8) * 0.012);
         body.rotation.z = 0;
         arms[0].rotation.x = state.settings.reducedMotion
           ? 0
-          : Math.sin(clock.elapsedTime * 1.4) * 0.025;
+          : Math.sin(elapsedTime * 1.4) * 0.025;
         arms[1].rotation.x = state.settings.reducedMotion
           ? 0
-          : -Math.sin(clock.elapsedTime * 1.4) * 0.025;
+          : -Math.sin(elapsedTime * 1.4) * 0.025;
         legs[0].rotation.x = 0;
         legs[1].rotation.x = 0;
       }
       const walkingBlend = Math.min(1, Math.hypot(velocityX, velocityZ) / 1.25);
       const lanternSway = state.settings.reducedMotion
         ? 0
-        : Math.sin(clock.elapsedTime * 10.5) * 0.075 * walkingBlend;
+        : Math.sin(elapsedTime * 10.5) * 0.075 * walkingBlend;
       lanternRig.rotation.z =
         lanternSway +
         (state.settings.reducedMotion
           ? 0
-          : Math.sin(clock.elapsedTime * 2.1) * 0.025);
+          : Math.sin(elapsedTime * 2.1) * 0.025);
       if (pendantMotion)
         pendantMotion.rotation.z = state.settings.reducedMotion
           ? 0
-          : Math.sin(clock.elapsedTime * (walkingBlend > 0.2 ? 6.2 : 2.2)) *
+          : Math.sin(elapsedTime * (walkingBlend > 0.2 ? 6.2 : 2.2)) *
             (0.035 + walkingBlend * 0.09);
       const emberPulse = state.settings.reducedMotion
         ? 1
-        : 1 + Math.sin(clock.elapsedTime * 8.5) * 0.045;
+        : 1 + Math.sin(elapsedTime * 8.5) * 0.045;
       lanternFlame.scale.set(
         emberPulse,
-        emberPulse * (1 + Math.sin(clock.elapsedTime * 6) * 0.035),
+        emberPulse * (1 + Math.sin(elapsedTime * 6) * 0.035),
         emberPulse,
       );
       (lanternFlame.material as THREE.MeshBasicMaterial).opacity =
@@ -1973,6 +2001,16 @@ export default function Stage({
             roomGroup.userData.discoveryBurst = undefined;
           }
         }
+        const roomFlames = roomGroup.userData.flames as
+          THREE.Object3D[] | undefined;
+        roomFlames?.forEach((flame, index) => {
+          const shimmer = state.settings.reducedMotion
+            ? 1
+            : 1 + Math.sin(elapsedTime * 8 + index * 2.1) * 0.05;
+          flame.scale.set(shimmer * 0.92, shimmer, shimmer * 0.92);
+        });
+      }
+      for (const { group: roomGroup, parts } of animatedRoomObjects) {
         const dx = camera.position.x - roomGroup.position.x;
         const dz = camera.position.z - roomGroup.position.z;
         const frontSide =
@@ -1983,51 +2021,44 @@ export default function Stage({
             : dz > 0
               ? "south"
               : "north";
-        const roomFlames = roomGroup.userData.flames as
-          THREE.Object3D[] | undefined;
-        roomFlames?.forEach((flame, index) => {
-          const shimmer = state.settings.reducedMotion
-            ? 1
-            : 1 + Math.sin(clock.elapsedTime * 8 + index * 2.1) * 0.05;
-          flame.scale.set(shimmer * 0.92, shimmer, shimmer * 0.92);
-        });
-        for (const part of roomGroup.children) {
+
+        for (const part of parts) {
           if (part.userData.hauntGlow && part instanceof THREE.Sprite) {
             const pulse = state.settings.reducedMotion
               ? 1
               : 1 +
-                Math.sin(clock.elapsedTime * 1.7 + roomGroup.position.x) *
+                Math.sin(elapsedTime * 1.7 + roomGroup.position.x) *
                   0.055;
             part.scale.copy(part.userData.baseGlow).multiplyScalar(pulse);
             (part.material as THREE.SpriteMaterial).opacity = state.settings
               .reducedMotion
               ? 0.31
               : 0.31 +
-                Math.sin(clock.elapsedTime * 2.2 + roomGroup.position.z) * 0.04;
+                Math.sin(elapsedTime * 2.2 + roomGroup.position.z) * 0.04;
           }
           if (part.userData.spiritLight && part instanceof THREE.PointLight)
             part.intensity = state.settings.reducedMotion
               ? 1.48
               : 1.48 +
-                Math.sin(clock.elapsedTime * 2.8 + roomGroup.position.x) * 0.12;
+                Math.sin(elapsedTime * 2.8 + roomGroup.position.x) * 0.12;
           if (part.userData.waterSurface)
             part.position.y = state.settings.reducedMotion
               ? part.userData.baseY
               : part.userData.baseY +
-                Math.sin(clock.elapsedTime * 1.25 + roomGroup.position.x) *
+                Math.sin(elapsedTime * 1.25 + roomGroup.position.x) *
                   0.012;
           if (part.userData.spirit) {
             part.position.y = state.settings.reducedMotion
               ? part.userData.baseY
               : part.userData.baseY +
-                Math.sin(clock.elapsedTime * 1.4 + roomGroup.position.x) * 0.12;
+                Math.sin(elapsedTime * 1.4 + roomGroup.position.x) * 0.12;
             if (!state.settings.reducedMotion) part.rotation.y += 0.36 * dt;
           }
           if (part.userData.roomLight && part instanceof THREE.PointLight)
             part.intensity = state.settings.reducedMotion
               ? 1.22
               : 1.22 +
-                Math.sin(clock.elapsedTime * 3.6 + roomGroup.position.z) * 0.09;
+                Math.sin(elapsedTime * 3.6 + roomGroup.position.z) * 0.09;
           const cut = part.userData.cutaway as
             { side: string; baseY: number; height: number } | undefined;
           if (!cut) continue;
@@ -2048,14 +2079,25 @@ export default function Stage({
         for (let i = 0; i < dustCount; i++) {
           const k = i * 3;
           pos[k + 1] += dustDrift[i] * dt;
-          pos[k] += Math.sin(clock.elapsedTime * 0.35 + i) * dt * 0.012;
+          pos[k] += Math.sin(elapsedTime * 0.35 + i) * dt * 0.012;
           if (pos[k + 1] > 8) pos[k + 1] = 0;
         }
         dustGeo.attributes.position.needsUpdate = true;
       }
       renderer.render(scene, camera);
     };
-    animate();
+    const visibilityChange = () => {
+      if (document.hidden) {
+        cancelAnimationFrame(raf);
+        held.current.clear();
+        return;
+      }
+      // Consume the hidden interval so the first resumed frame has no time jump.
+      clock.getDelta();
+      if (alive) raf = requestAnimationFrame(animate);
+    };
+    document.addEventListener("visibilitychange", visibilityChange);
+    if (!document.hidden) animate();
     step.current = (forward, strafe) => {
       if (state.mode !== "explore") return;
       const dx = -Math.sin(angle) * forward + Math.cos(angle) * strafe;
@@ -2239,6 +2281,7 @@ export default function Stage({
       alive = false;
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
+      document.removeEventListener("visibilitychange", visibilityChange);
       window.removeEventListener("keydown", keydown);
       window.removeEventListener("keyup", keyup);
       window.removeEventListener("blur", clearHeld);
@@ -2283,6 +2326,9 @@ export default function Stage({
     1,
     ...state.rooms.map((r) => Math.max(Math.abs(r.x), Math.abs(r.y))),
   );
+  const activeRoom = state.rooms.find(
+    (room) => room.id === state.players[state.current].roomId,
+  );
   const mapScale = 44 / mapSpread;
   const dpad = (key: string, forward: number, strafe: number) => ({
     onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -2302,6 +2348,15 @@ export default function Stage({
   return (
     <div className={`stage-wrap ${hudOpen ? "show-controls" : ""}`}>
       <div className="stage" ref={mount} />
+      {renderError && (
+        <div className="stage-error" role="status">
+          <strong>The 3D room view is unavailable.</strong>
+          <span>
+            You are in {activeRoom?.name || "the current room"}. Use the
+            connected-room list below to move, or use the expedition actions.
+          </span>
+        </div>
+      )}
       <div className="scene-caption">
         <span className="live-dot" />{" "}
         {state.mode === "dollhouse"
@@ -2309,7 +2364,7 @@ export default function Stage({
           : "INSIDE THE HOUSE"}{" "}
         <span className="scene-hint">Drag to orbit · scroll to zoom</span>
       </div>
-      <div className="camera-controls" aria-label="Camera controls">
+      <div className="camera-controls" role="group" aria-label="Camera controls">
         <button
           aria-label="Zoom out"
           title="Zoom out (−)"
@@ -2346,7 +2401,7 @@ export default function Stage({
         )}
       </div>
       {state.mode === "explore" && (
-        <div className="walk-controls" aria-label="Move explorer">
+        <div className="walk-controls" role="group" aria-label="Move explorer">
           <button aria-label="Move forward" {...dpad("w", 1, 0)}>
             ↑
           </button>
@@ -2364,33 +2419,54 @@ export default function Stage({
         </div>
       )}
       {state.mode === "dollhouse" && (
-        <div className="mini-map">
-          {state.rooms.map((r) => (
-            <button
-              key={r.id}
-              title={r.name}
-              className={`map-room ${state.players.some((p) => p.roomId === r.id) ? "occupied" : ""} ${r.haunted ? "haunted" : ""}`}
-              style={{
-                left: `calc(50% + ${r.x * mapScale}px)`,
-                top: `calc(50% + ${r.y * mapScale}px)`,
-              }}
-              onClick={() => onMove(r.id)}
-            />
-          ))}
+        <div
+          className="mini-map"
+          role="group"
+          aria-label="Floor plan. Only connected rooms can be entered."
+        >
+          {state.rooms.map((r) => {
+            const isCurrent = r.id === currentRoomId;
+            const isConnected = activeRoom?.links.includes(r.id) ?? false;
+            const floorName =
+              r.floor < 0 ? "basement" : r.floor > 0 ? "upper floor" : "ground floor";
+            return (
+              <button
+                key={r.id}
+                title={`${r.name} · ${floorName}`}
+                aria-label={`${isCurrent ? "Current room" : isConnected ? "Enter" : "Not connected"}: ${r.name}, ${floorName}${r.haunted ? ", spirit present" : ""}`}
+                aria-current={isCurrent ? "location" : undefined}
+                disabled={!isConnected || state.ap < 1}
+                className={`map-room ${state.players.some((p) => p.roomId === r.id) ? "occupied" : ""} ${r.haunted ? "haunted" : ""}`}
+                style={{
+                  left: `calc(50% + ${r.x * mapScale}px)`,
+                  top: `calc(50% + ${r.y * mapScale}px + ${r.floor * 18}px)`,
+                }}
+                onClick={() => onMove(r.id)}
+              />
+            );
+          })}
         </div>
       )}
-      {state.mode === "explore" && (
-        <div className="doorway-nav">
-          <span>CONNECTED DOORS</span>
+      <div className="doorway-nav" role="group" aria-label="Connected rooms">
+          <span>{state.mode === "explore" ? "CONNECTED DOORS" : "CONNECTED ROOMS"}</span>
           {(
             state.rooms.find(
               (r) => r.id === state.players[state.current].roomId,
             )?.links || []
           ).map((id) => {
             const r = state.rooms.find((x) => x.id === id);
+            const floor = r
+              ? r.floor < 0
+                ? "basement"
+                : r.floor > 0
+                  ? "upper floor"
+                  : "ground floor"
+              : "";
             return r ? (
               <button
                 key={id}
+                title={`Enter ${r.name}, ${floor}`}
+                aria-label={`Enter ${r.name}, ${floor}${r.haunted ? ", spirit present" : ""}`}
                 disabled={state.ap < 1}
                 onClick={() => onMove(id)}
               >
@@ -2400,8 +2476,7 @@ export default function Stage({
               </button>
             ) : null;
           })}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

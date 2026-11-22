@@ -1,10 +1,11 @@
-import React, { Suspense, lazy, useEffect, useState } from "react";
+import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   act,
   CHARACTERS,
   GameState,
   isGameSave,
+  isSaveImportSizeAllowed,
   loadGame,
   newGame,
   saveGame,
@@ -44,8 +45,23 @@ import {
 } from "lucide-react";
 import "./style.css";
 import "./visual-polish.css";
+const createRunId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" &&
+  window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
 function App() {
   const [game, setGame] = useState<GameState | null>(null);
+  const [runId, setRunId] = useState(() => {
+    try {
+      return localStorage.getItem("htr-active-run") || "";
+    } catch {
+      return "";
+    }
+  });
+  const completedRuns = useRef(new Set<string>());
   const [screen, setScreen] = useState<
     "menu" | "select" | "play" | "settings" | "history"
   >("menu");
@@ -60,50 +76,99 @@ function App() {
   });
   const [audio, setAudio] = useState(false);
   const [master, setMaster] = useState(0.35);
+  const [systemReduced, setSystemReduced] = useState(prefersReducedMotion);
   const [reduced, setReduced] = useState(
-    () => loadGame()?.settings.reducedMotion ?? false,
+    () => loadGame()?.settings.reducedMotion ?? prefersReducedMotion(),
   );
   const [importMessage, setImportMessage] = useState("");
+  const [pendingImport, setPendingImport] = useState<GameState | null>(null);
+  const [saveWarning, setSaveWarning] = useState("");
   const [seed, setSeed] = useState("");
   const [showJournal, setShowJournal] = useState(false);
   const [showExplorer, setShowExplorer] = useState(false);
   const [showHouse, setShowHouse] = useState(false);
-  const [hudOpen, setHudOpen] = useState(false);
+  const [hudOpen, setHudOpen] = useState(true);
   const update = (action: string, payload?: string) =>
     setGame((g) => (g ? act(g, action, payload) : g));
-  const toggleHud = () =>
-    setHudOpen((open) => {
-      if (open) {
-        setShowExplorer(false);
-        setShowHouse(false);
-        setShowJournal(false);
-      }
-      return !open;
-    });
+  const beginRunRecord = () => {
+    const id = createRunId();
+    setRunId(id);
+    try {
+      localStorage.setItem("htr-active-run", id);
+    } catch {
+      // In-memory id still prevents duplicate history in this page session.
+    }
+    return id;
+  };
+  const resumeRunRecord = () => {
+    let id = runId;
+    try {
+      id = localStorage.getItem("htr-active-run") || id;
+    } catch {
+      // Continue with the in-memory run id when storage is unavailable.
+    }
+    if (!id) id = createRunId();
+    setRunId(id);
+    try {
+      localStorage.setItem("htr-active-run", id);
+    } catch {
+      // In-memory id still prevents duplicate history in this page session.
+    }
+    return id;
+  };
+  const toggleHud = () => setHudOpen((open) => !open);
   useEffect(() => {
-    if (game) {
-      saveGame(game);
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updatePreference = () => setSystemReduced(preference.matches);
+    updatePreference();
+    if (preference.addEventListener) {
+      preference.addEventListener("change", updatePreference);
+      return () =>
+        preference.removeEventListener("change", updatePreference);
+    }
+    preference.addListener(updatePreference);
+    return () => preference.removeListener(updatePreference);
+  }, []);
+  useEffect(() => {
+    if (!game) return;
+    if (saveGame(game)) {
       setHasSave(true);
-      if (
-        game.phase === "ended" &&
-        !localStorage.getItem("htr-ended-" + game.seed)
-      ) {
-        const item = {
-          seed: game.seed,
-          scenario: game.scenario,
-          ending: game.ending,
-          rooms: game.rooms.length,
-          character: game.players[0]?.name,
-          turn: game.turn,
-          date: new Date().toLocaleDateString(),
-        };
-        const h = [item, ...history].slice(0, 12);
-        setHistory(h);
-        localStorage.setItem("htr-history", JSON.stringify(h));
-        localStorage.setItem("htr-ended-" + game.seed, "1");
+      setSaveWarning("");
+    } else {
+      setSaveWarning(
+        "Autosave is unavailable in this browser. Export your expedition to keep a backup.",
+      );
+    }
+    if (game.phase === "ended") {
+      const completedRunId = runId || createRunId();
+      if (!runId) setRunId(completedRunId);
+      if (!completedRuns.current.has(completedRunId)) {
+        completedRuns.current.add(completedRunId);
+        try {
+          const historyKey = `htr-ended-run-${completedRunId}`;
+          if (!localStorage.getItem(historyKey)) {
+            const item = {
+              runId: completedRunId,
+              seed: game.seed,
+              scenario: game.scenario,
+              ending: game.ending,
+              rooms: game.rooms.length,
+              character: game.players[0]?.name,
+              turn: game.turn,
+              date: new Date().toLocaleDateString(),
+            };
+            const h = [item, ...history].slice(0, 12);
+            setHistory(h);
+            localStorage.setItem("htr-history", JSON.stringify(h));
+            localStorage.setItem(historyKey, "1");
+          }
+        } catch {
+          // A history write must not interrupt the completed expedition.
+        }
       }
     }
-  }, [game]);
+  }, [game, runId]);
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -111,7 +176,7 @@ function App() {
         setShowHouse(false);
         setShowJournal(false);
         setHudOpen(false);
-        if (screen === "settings") setScreen(game ? "play" : "menu");
+        if (screen === "settings") closeSettings();
         return;
       }
       const target = event.target as HTMLElement;
@@ -145,26 +210,92 @@ function App() {
     window.addEventListener("keydown", onShortcut);
     return () => window.removeEventListener("keydown", onShortcut);
   }, [screen, game]);
+  useEffect(() => {
+    const dialogs = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-modal="true"]',
+      ),
+    );
+    const dialog = dialogs[dialogs.length - 1];
+    if (!dialog) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const selector =
+      'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+    const focusable = () =>
+      Array.from(dialog.querySelectorAll<HTMLElement>(selector)).filter(
+        (element) => element.getClientRects().length > 0,
+      );
+    focusable()[0]?.focus();
+    const keepFocusInside = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", keepFocusInside);
+    return () => {
+      document.removeEventListener("keydown", keepFocusInside);
+      requestAnimationFrame(() => {
+        if (previous?.isConnected) {
+          previous.focus();
+        } else if (screen === "play") {
+          document
+            .querySelector<HTMLElement>(
+              ".game-shell .action-button:not(:disabled)",
+            )
+            ?.focus();
+        }
+      });
+    };
+  }, [screen, showJournal, pendingImport?.seed, game?.event?.id, game?.phase]);
   const start = () => {
     const s = newGame(
       seed ? Number(seed) : Math.floor(Math.random() * 0x7fffffff),
       chosen,
     );
     s.settings.reducedMotion = reduced;
+    beginRunRecord();
     setGame(s);
     setScreen("play");
   };
   const continueGame = () => {
     const s = loadGame();
     if (s) {
+      resumeRunRecord();
       setGame(s);
       setReduced(s.settings.reducedMotion);
       setScreen("play");
     }
   };
   const leave = () => {
-    if (game) saveGame(game);
+    if (game && !saveGame(game))
+      setSaveWarning(
+        "Autosave is unavailable in this browser. Export your expedition to keep a backup.",
+      );
     setScreen("menu");
+  };
+  const closeSettings = () => {
+    setScreen(game ? "play" : "menu");
+    requestAnimationFrame(() => {
+      const target = game
+        ? document.querySelector<HTMLElement>(
+            '.game-topbar [aria-label="Accessibility and sound settings"]',
+          )
+        : document.querySelector<HTMLElement>('.menu-top [aria-label="Settings"]');
+      target?.focus();
+    });
   };
   const toggleAudio = () => {
     if (!audio) {
@@ -205,7 +336,14 @@ function App() {
   };
   const importSave = (file?: File) => {
     if (!file) return;
+    setPendingImport(null);
+    if (!isSaveImportSizeAllowed(file.size)) {
+      setImportMessage("Save files must be 1 MiB (1,048,576 bytes) or smaller.");
+      return;
+    }
     const reader = new FileReader();
+    reader.onerror = () => setImportMessage("Could not read save file.");
+    reader.onabort = () => setImportMessage("Save import was cancelled.");
     reader.onload = () => {
       try {
         const s: unknown = JSON.parse(String(reader.result));
@@ -213,9 +351,8 @@ function App() {
           throw Error(
             "This save is malformed or from an unsupported expedition version.",
           );
-        setGame(s);
-        setScreen("play");
-        setImportMessage("Expedition restored.");
+        setPendingImport(s);
+        setImportMessage("");
       } catch (e) {
         setImportMessage(
           e instanceof Error ? e.message : "Could not read save.",
@@ -226,16 +363,22 @@ function App() {
   };
   const settings = () => (
     <div className="modal-backdrop" role="presentation">
-      <section className="modal settings-modal">
+      <section
+        className="modal settings-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        tabIndex={-1}
+      >
         <button
           className="close"
-          onClick={() => setScreen(game ? "play" : "menu")}
+          onClick={closeSettings}
           aria-label="Close settings"
         >
           <X />
         </button>
         <div className="eyebrow">HOUSEKEEPING</div>
-        <h2>Expedition settings</h2>
+        <h2 id="settings-title">Expedition settings</h2>
         <label className="setting-row">
           <span>
             <Volume2 /> Master sound
@@ -253,7 +396,11 @@ function App() {
             }}
           />
         </label>
-        <button className="setting-row button-row" onClick={toggleAudio}>
+        <button
+          className="setting-row button-row"
+          onClick={toggleAudio}
+          aria-pressed={audio}
+        >
           <span>
             {audio ? (
               <>
@@ -269,6 +416,7 @@ function App() {
         </button>
         <button
           className="setting-row button-row"
+          aria-pressed={reduced || systemReduced}
           onClick={() => {
             const next = !reduced;
             setReduced(next);
@@ -282,15 +430,23 @@ function App() {
           <span>
             <Eye /> Reduced motion
           </span>
-          <span className="switch">{reduced ? "ON" : "OFF"}</span>
+          <span className="switch">
+            {systemReduced && !reduced ? "SYSTEM ON" : reduced ? "ON" : "OFF"}
+          </span>
         </button>
+        {systemReduced && (
+          <p className="setting-note">
+            Reduced motion is enabled by your device preference and remains active
+            in the 3D scene.
+          </p>
+        )}
         <div className="note-box">
-          The low atmospheric tone is synthesized in your browser. Gameplay has
-          captions and does not require sound.
+          The low atmospheric tone is synthesized in your browser. All story,
+          choices, and gameplay information are shown as text; sound is optional.
         </div>
         <button
           className="primary-btn"
-          onClick={() => setScreen(game ? "play" : "menu")}
+          onClick={closeSettings}
         >
           Return to expedition
         </button>
@@ -349,13 +505,10 @@ function App() {
                 <BookOpen size={15} /> Previous expeditions{" "}
                 <span className="count">{history.length}</span>
               </button>
-              <button
-                className="network-btn"
-                disabled
-                title="Online play requires a configured Firebase backend"
-              >
-                Play with friends <span>NETWORK UNAVAILABLE</span>
-              </button>
+              <p className="network-note">
+                <strong>Online play unavailable</strong>
+                <span>No multiplayer backend is configured in this build.</span>
+              </p>
             </div>
             <p className="solo-note">
               <span className="live-dot" /> SOLO EXPEDITION · AUTOSAVES LOCALLY
@@ -405,6 +558,7 @@ function App() {
           {CHARACTERS.map((c, i) => (
             <button
               key={c.id}
+              aria-pressed={chosen === c.id}
               onClick={() => setChosen(c.id)}
               className={`character-card ${chosen === c.id ? "selected" : ""}`}
             >
@@ -435,7 +589,7 @@ function App() {
                   <span>{c.passive}</span>
                 </div>
                 <div className="weakness">
-                  <Skull size={13} />
+                  <Info size={13} />
                   <span>{c.weakness}</span>
                 </div>
               </div>
@@ -454,6 +608,9 @@ function App() {
             </span>
             <input
               placeholder="Random"
+              inputMode="numeric"
+              maxLength={10}
+              aria-label="Optional numeric expedition seed"
               value={seed}
               onChange={(e) => setSeed(e.target.value.replace(/\D/g, ""))}
             />
@@ -518,10 +675,14 @@ function App() {
   const exits = room.links
     .map((id) => game.rooms.find((r) => r.id === id)!)
     .filter(Boolean);
-  const danger = game.pressure;
+  const danger = Math.max(0, Math.min(9, game.pressure));
+  const reducedMotion = reduced || systemReduced;
+  const stageState = reducedMotion && !game.settings.reducedMotion
+    ? { ...game, settings: { ...game.settings, reducedMotion: true } }
+    : game;
   return (
     <main
-      className={`game-shell immersive ${hudOpen ? "hud-open" : ""} ${game.settings.reducedMotion ? "reduce-motion" : ""}`}
+      className={`game-shell immersive ${hudOpen ? "hud-open" : ""} ${reducedMotion ? "reduce-motion" : ""}`}
     >
       <header className="game-topbar">
         <button className="brand-mark" onClick={leave}>
@@ -532,8 +693,8 @@ function App() {
             THE HOUSE <i>THAT REMEMBERS</i>
           </span>
         </button>
-        <div className="top-meta">
-          <span>
+        <nav className="top-meta" aria-label="Expedition navigation">
+          <span aria-label={`Seed ${game.seed}`}>
             <Compass size={14} /> SEED {game.seed}
           </span>
           <span>
@@ -564,11 +725,16 @@ function App() {
           <button className="top-action" onClick={() => setShowJournal(true)}>
             <BookOpen size={15} /> JOURNAL <b>{game.clues.length}</b>
           </button>
-          <button className="top-action" onClick={exportSave}>
+          <button
+            className="top-action"
+            aria-label="Export expedition save"
+            onClick={exportSave}
+          >
             <Download size={15} /> EXPORT
           </button>
           <button
             className="top-action"
+            aria-label="Import expedition save"
             onClick={() => document.getElementById("import-save")?.click()}
           >
             <Upload size={15} /> IMPORT
@@ -578,12 +744,20 @@ function App() {
             type="file"
             accept="application/json"
             hidden
-            onChange={(e) => importSave(e.target.files?.[0])}
+            onChange={(e) => {
+              const file = e.currentTarget.files?.[0];
+              e.currentTarget.value = "";
+              importSave(file);
+            }}
           />
-          <button className="top-action" onClick={() => setScreen("settings")}>
+          <button
+            className="top-action"
+            aria-label="Accessibility and sound settings"
+            onClick={() => setScreen("settings")}
+          >
             <Settings size={15} />
           </button>
-        </div>
+        </nav>
       </header>
       <section
         className={`game-layout ${showExplorer ? "show-explorer" : ""} ${showHouse ? "show-house" : ""}`}
@@ -631,21 +805,24 @@ function App() {
           <div className="vitals">
             <div>
               <span>BODY</span>
-              <strong>
+              <strong aria-label={`${player.hp} of 4 health`}>
                 {"◆".repeat(player.hp)}
                 <i>{"◇".repeat(4 - player.hp)}</i>
               </strong>
             </div>
             <div>
               <span>FEAR</span>
-              <strong className="fear-icons">
+              <strong
+                className="fear-icons"
+                aria-label={`${player.fear} of 5 fear`}
+              >
                 {"●".repeat(player.fear)}
                 <i>{"○".repeat(5 - player.fear)}</i>
               </strong>
             </div>
           </div>
           <div className="ability-note">
-            <div className="eyebrow">INSTINCT</div>
+            <div className="eyebrow">EXPLORER RULE</div>
             {CHARACTERS.find((c) => c.id === player.id)?.passive}
           </div>
           <div className="rail-title inventory-head">
@@ -676,10 +853,10 @@ function App() {
           <button
             className="immersive-toggle"
             aria-label={
-              hudOpen ? "Hide expedition controls" : "Show expedition controls"
+              hudOpen ? "Hide scene controls" : "Show scene controls"
             }
             aria-expanded={hudOpen}
-            title="Expedition controls · F1 or ?"
+            title="Scene controls · F1 or ?"
             onClick={() => {
               toggleHud();
               requestAnimationFrame(() =>
@@ -703,13 +880,22 @@ function App() {
                 <span>
                   {" "}
                   ·{" "}
-                  {["BASEMENT", "GROUND FLOOR", "UPPER FLOOR"][room.floor] ||
-                    "GROUND FLOOR"}
+                  {room.floor < 0
+                    ? "BASEMENT"
+                    : room.floor > 0
+                      ? "UPPER FLOOR"
+                      : "GROUND FLOOR"}
                 </span>
               </h2>
             </div>
             <button
               className="mode-toggle"
+              aria-label={
+                game.mode === "dollhouse"
+                  ? "Switch to room exploration view"
+                  : "Switch to floor plan view"
+              }
+              aria-pressed={game.mode === "dollhouse"}
               onClick={() => update("toggle-map")}
             >
               {game.mode === "dollhouse" ? (
@@ -724,7 +910,7 @@ function App() {
             fallback={<div className="stage-loading">The house is waking…</div>}
           >
             <Stage
-              state={game}
+              state={stageState}
               onMove={(id) => update("move", id)}
               onToggleMode={() => update("toggle-map")}
               onExplore={(direction) => update("explore", direction)}
@@ -733,14 +919,43 @@ function App() {
               hudOpen={hudOpen}
             />
           </Suspense>
+          <div className="play-status-strip" aria-label="Current expedition status">
+            <div>
+              <span className="eyebrow">CURRENT OBJECTIVE</span>
+              <p>{game.objective}</p>
+            </div>
+            <span className="status-pressure">
+              Watch {game.turn}{" · "}
+              {danger < 3 ? "Listening" : danger < 6 ? "Awakening" : "Near"}
+              {" · "}Pressure {danger} of 9{` · ${game.omens} of 3 omens`}
+            </span>
+            <button
+              onClick={() => {
+                setShowExplorer(false);
+                setShowHouse(true);
+              }}
+            >
+              House details
+            </button>
+          </div>
           <div className="action-bar">
-            <div className="action-count">
-              <span className="eyebrow">ACTIONS REMAINING</span>
-              <div>
+          <div
+            className="action-count"
+            role="status"
+            aria-live="polite"
+            aria-label={`${game.ap} actions remaining`}
+          >
+            <span className="eyebrow">ACTIONS REMAINING</span>
+              <div aria-hidden="true">
                 {Array.from({ length: 3 }, (_, i) => (
                   <i key={i} className={i < game.ap ? "active" : ""} />
                 ))}
               </div>
+              {game.ap < 1 && game.phase !== "ended" && (
+                <small className="action-reason">
+                  End watch to continue.
+                </small>
+              )}
             </div>
             {game.phase === "play" ? (
               <>
@@ -799,18 +1014,9 @@ function App() {
                 </span>
               </button>
             ) : (
-              <button
-                className="action-button discover"
-                onClick={() => {
-                  setGame(null);
-                  setScreen("select");
-                }}
-              >
-                <RotateCcw />
-                <span>
-                  Begin another expedition<small>The house remembers</small>
-                </span>
-              </button>
+              <p className="ending-action-note">
+                Expedition complete. Review the ending to continue.
+              </p>
             )}
           </div>
           {hudOpen && game.lastRoll && (
@@ -842,7 +1048,7 @@ function App() {
             </button>
           </div>
           <div className="pressure-meter">
-            <div className="pressure-track">
+            <div className="pressure-track" aria-hidden="true">
               {Array.from({ length: 9 }, (_, i) => (
                 <i key={i} className={i < danger ? "lit" : ""} />
               ))}
@@ -857,7 +1063,10 @@ function App() {
           </div>
           <div className="omen-line">
             <span>OMENS GATHERED</span>
-            <div>
+            <div
+              role="img"
+              aria-label={`${game.omens} of 3 omens gathered`}
+            >
               {Array.from({ length: 3 }, (_, i) => (
                 <i key={i} className={i < game.omens ? "lit" : ""} />
               ))}
@@ -896,9 +1105,7 @@ function App() {
               </div>
               <span className="your-turn">YOU</span>
             </div>
-            <button className="end-turn-btn" onClick={() => update("end-turn")}>
-              End watch <ArrowRight size={15} />
-            </button>
+              <p className="turn-hint">End watch from the action bar when you are ready.</p>
           </div>
           <div className="log-panel">
             <div className="rail-title">
@@ -931,8 +1138,14 @@ function App() {
         </aside>
       </section>
       {game.event && (
-        <div className="event-backdrop">
-          <section className="event-card">
+        <div className="event-backdrop" role="presentation">
+          <section
+            className="event-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="event-title"
+            tabIndex={-1}
+          >
             <div className="event-art">
               <div className="event-orbit" />
               <Eye size={45} />
@@ -940,7 +1153,7 @@ function App() {
             </div>
             <div className="event-copy">
               <div className="eyebrow">THE HOUSE MAKES AN OFFER</div>
-              <h2>{game.event.title}</h2>
+              <h2 id="event-title">{game.event.title}</h2>
               <p>{game.event.text}</p>
               <div className="choice-list">
                 {game.event.choices.map((c, i) => (
@@ -969,21 +1182,27 @@ function App() {
           <div className="eyebrow">A REVELATION</div>
           <h2>{game.scenario.replaceAll("-", " ").toUpperCase()}</h2>
           <p>{game.objective}</p>
-          <button onClick={() => update("revelation-action")}>
-            Face what comes next <ArrowRight size={15} />
-          </button>
+          <p className="revelation-hint">
+            Use “Act on the revelation” in the action bar to continue.
+          </p>
         </div>
       )}
       {game.phase === "ended" && (
-        <div className="ending-backdrop">
-          <section className="ending-card">
+        <div className="ending-backdrop" role="presentation">
+          <section
+            className="ending-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ending-title"
+            tabIndex={-1}
+          >
             <div className="eyebrow">
               EXPEDITION {game.ending.includes("closes") ? "LOST" : "CONCLUDED"}
             </div>
             <div className="ending-seal">
               <Eye size={30} />
             </div>
-            <h1>
+            <h1 id="ending-title">
               The house
               <br />
               <em>remembers.</em>
@@ -1023,16 +1242,28 @@ function App() {
         </div>
       )}
       {showJournal && (
-        <div className="modal-backdrop" onClick={() => setShowJournal(false)}>
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setShowJournal(false)}
+        >
           <section
             className="modal journal-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="journal-title"
+            tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
           >
-            <button className="close" onClick={() => setShowJournal(false)}>
+            <button
+              className="close"
+              aria-label="Close field journal"
+              onClick={() => setShowJournal(false)}
+            >
               <X />
             </button>
             <div className="eyebrow">FIELD NOTES · SEED {game.seed}</div>
-            <h2>The house, in fragments.</h2>
+            <h2 id="journal-title">The house, in fragments.</h2>
             <div className="journal-tabs">
               <span>
                 <BookOpen size={14} /> CLUES {game.clues.length}
@@ -1078,9 +1309,66 @@ function App() {
           </section>
         </div>
       )}
+      {pendingImport && (
+        <div className="modal-backdrop import-backdrop" role="presentation">
+          <section
+            className="modal import-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="import-confirm-title"
+            tabIndex={-1}
+          >
+            <div className="eyebrow">RESTORE EXPEDITION</div>
+            <h2 id="import-confirm-title">Replace this expedition?</h2>
+            <p>
+              The selected save uses seed {pendingImport.seed} and contains{" "}
+              {pendingImport.rooms.length} rooms, {pendingImport.clues.length} clues,
+              and watch {pendingImport.turn}.
+            </p>
+            <p>
+              Confirming replaces the current expedition and its local autosave.
+              Export the current run first if you want a separate backup.
+            </p>
+            <div className="import-confirm-actions">
+              <button
+                className="secondary-btn"
+                onClick={() => setPendingImport(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="primary-btn"
+                onClick={() => {
+                  if (!pendingImport) return;
+                  const restored = pendingImport;
+                  setPendingImport(null);
+                  beginRunRecord();
+                  setGame(restored);
+                  setScreen("play");
+                  setImportMessage("Expedition restored.");
+                }}
+              >
+                Replace and restore
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {importMessage && (
-        <div className="toast" onClick={() => setImportMessage("")}>
-          {importMessage}
+        <div className="toast" role="status" aria-live="polite">
+          <span>{importMessage}</span>
+          <button
+            className="toast-dismiss"
+            aria-label="Dismiss notification"
+            onClick={() => setImportMessage("")}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      {saveWarning && (
+        <div className="toast save-warning-toast" role="status" aria-live="polite">
+          {saveWarning}
         </div>
       )}
     </main>

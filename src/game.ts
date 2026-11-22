@@ -73,7 +73,7 @@ export const CHARACTERS: Omit<Character, "roomId">[] = [
     role: "The Archivist",
     bio: "A meticulous cataloguer tracing a missing folio to the estate.",
     stats: { body: 1, grace: 2, insight: 4, nerve: 2 },
-    passive: "Once per room, a search reveals an extra clue.",
+    passive: "A successful search reveals an extra clue.",
     weakness: "Physical checks are made at −1.",
     hp: 4,
     fear: 0,
@@ -85,8 +85,8 @@ export const CHARACTERS: Omit<Character, "roomId">[] = [
     role: "The Medium",
     bio: "She came to return a voice that has followed her for years.",
     stats: { body: 2, grace: 2, insight: 3, nerve: 3 },
-    passive: "Sees spirit traces before they manifest.",
-    weakness: "Ghosts notice her at a distance.",
+    passive: "Automatically succeeds when investigating Watchers and Mourners.",
+    weakness: "Wisp investigations still require a Grace check.",
     hp: 4,
     fear: 0,
     items: ["Threadbare Charm"],
@@ -97,8 +97,8 @@ export const CHARACTERS: Omit<Character, "roomId">[] = [
     role: "The Locksmith",
     bio: "A quiet specialist hired to open the house’s sealed rooms.",
     stats: { body: 2, grace: 4, insight: 2, nerve: 1 },
-    passive: "Locks and mechanisms yield to a Grace check once per room.",
-    weakness: "The house can unsettle his confidence.",
+    passive: "Grace 4 — the highest agility among the six explorers.",
+    weakness: "Nerve 1 — the lowest nerve among the six explorers.",
     hp: 4,
     fear: 0,
     items: ["Tension Wrench"],
@@ -109,8 +109,8 @@ export const CHARACTERS: Omit<Character, "roomId">[] = [
     role: "The Physician",
     bio: "The family doctor vanished here; she has inherited his notes.",
     stats: { body: 3, grace: 1, insight: 3, nerve: 2 },
-    passive: "Can tend one injury with a Search action.",
-    weakness: "Her old casebook contains a dangerous name.",
+    passive: "Body 3 — the highest body stat among the six explorers.",
+    weakness: "Grace 1 — the lowest agility among the six explorers.",
     hp: 4,
     fear: 0,
     items: ["Field Kit"],
@@ -121,8 +121,8 @@ export const CHARACTERS: Omit<Character, "roomId">[] = [
     role: "The Illusionist",
     bio: "A stage magician seeking the trick behind a vanished audience.",
     stats: { body: 1, grace: 4, insight: 2, nerve: 2 },
-    passive: "May evade one supernatural consequence per expedition.",
-    weakness: "Reflections can imitate his gestures.",
+    passive: "Grace 4 — tied for the highest agility among the six explorers.",
+    weakness: "Body 1 — tied for the lowest body stat among the six explorers.",
     hp: 4,
     fear: 0,
     items: ["Silver Coin"],
@@ -133,8 +133,8 @@ export const CHARACTERS: Omit<Character, "roomId">[] = [
     role: "The Heir",
     bio: "The last heir returns to learn why every family portrait is turned away.",
     stats: { body: 2, grace: 2, insight: 3, nerve: 3 },
-    passive: "Recognizes family marks and hidden architecture.",
-    weakness: "The house knows his name.",
+    passive: "Insight 3 and Nerve 3 — a balanced investigator under pressure.",
+    weakness: "No stat exceeds 3; specialists may outperform him in a single check.",
     hp: 4,
     fear: 0,
     items: ["Estate Key"],
@@ -575,8 +575,7 @@ function availableSlot(s: GameState, from: Room) {
   const offset = Math.floor(rand(s) * 4);
   for (let i = 0; i < 4; i++) {
     const [x, y] = dirs[(i + offset) % 4];
-    if (!s.rooms.some((r) => r.floor === from.floor && r.x === x && r.y === y))
-      return { x, y };
+    if (!s.rooms.some((r) => r.x === x && r.y === y)) return { x, y };
   }
   return null;
 }
@@ -614,7 +613,7 @@ function maybeEvent(s: GameState, room: Room) {
 function maybeRevelation(s: GameState) {
   if (s.phase !== "play" || s.omens < 3) return;
   s.phase = "revelation";
-  s.pressure += 2;
+  s.pressure = Math.min(9, s.pressure + 2);
   const options = [
     "house-chosen",
     "last-midnight",
@@ -695,10 +694,7 @@ export function act(s: GameState, action: string, payload?: string): GameState {
       : null;
     if (
       requested &&
-      n.rooms.some(
-        (r) =>
-          r.floor === from.floor && r.x === requested.x && r.y === requested.y,
-      )
+      n.rooms.some((r) => r.x === requested.x && r.y === requested.y)
     )
       return n;
     const slot = requested || availableSlot(n, from);
@@ -727,7 +723,7 @@ export function act(s: GameState, action: string, payload?: string): GameState {
         name: roomNames(t[0]),
         x: slot.x,
         y: slot.y,
-        floor: 0,
+        floor: t[2] === "upper" ? 1 : t[2] === "basement" ? -1 : 0,
         links: [from.id],
         searched: false,
         secret: false,
@@ -812,6 +808,17 @@ export function act(s: GameState, action: string, payload?: string): GameState {
           log(n, `Journal: ${clue}`, "discovery");
         }
       }
+      if (p.id === "ada") {
+        const extraClue = [
+          "Ada notes a catalog mark where the family crest was scraped away.",
+          "Ada finds a folio entry for a room missing from the house plans.",
+          "Ada records that the clocks stop before the house changes shape.",
+        ].find((clue) => !n.clues.includes(clue));
+        if (extraClue) {
+          n.clues.push(extraClue);
+          log(n, `Ada’s extra clue: ${extraClue}`, "discovery");
+        }
+      }
     } else {
       p.fear = Math.min(5, p.fear + 1);
       n.attention++;
@@ -868,7 +875,7 @@ export function act(s: GameState, action: string, payload?: string): GameState {
         p.fear = Math.max(0, p.fear - 1);
         break;
       case "break":
-        n.pressure++;
+        n.pressure = Math.min(9, n.pressure + 1);
         n.attention++;
         break;
       case "kind":
@@ -1020,7 +1027,7 @@ export function act(s: GameState, action: string, payload?: string): GameState {
         log(n, n.ending, "discovery");
       } else {
         n.rooms[n.rooms.length - 1].haunted = "mourner";
-        n.pressure++;
+        n.pressure = Math.min(9, n.pressure + 1);
         log(
           n,
           "The house shifts its corridors. Find the buried heart by exploring.",
@@ -1042,67 +1049,205 @@ export function act(s: GameState, action: string, payload?: string): GameState {
   }
   return n;
 }
-export const saveGame = (s: GameState) =>
-  localStorage.setItem("htr-save-v1", JSON.stringify(s));
+export const MAX_SAVE_IMPORT_BYTES = 1024 * 1024;
+export const isSaveImportSizeAllowed = (bytes: number) =>
+  Number.isSafeInteger(bytes) && bytes >= 0 && bytes <= MAX_SAVE_IMPORT_BYTES;
+
+export function saveGame(s: GameState): boolean {
+  try {
+    localStorage.setItem("htr-save-v1", JSON.stringify(s));
+    return true;
+  } catch {
+    // Storage may be disabled or full; keep the current expedition playable.
+    return false;
+  }
+}
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object" && !Array.isArray(value);
+const isText = (value: unknown, max = 2048): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= max;
+const isTextList = (
+  value: unknown,
+  maxItems: number,
+  maxText = 2048,
+): value is string[] =>
+  Array.isArray(value) &&
+  value.length <= maxItems &&
+  value.every((entry) => isText(entry, maxText));
+const isStat = (value: unknown): value is Stat =>
+  value === "body" ||
+  value === "grace" ||
+  value === "insight" ||
+  value === "nerve";
+
+/** Validate persisted and imported JSON at the runtime boundary, not by TS types alone. */
 export function isGameSave(value: unknown): value is GameState {
-  if (!value || typeof value !== "object") return false;
-  const s = value as Partial<GameState>;
+  if (!isRecord(value)) return false;
+  const s = value;
   const phases: Phase[] = ["menu", "select", "play", "revelation", "ended"];
-  if (s.version !== 1 || !phases.includes(s.phase as Phase)) return false;
-  if (!Number.isInteger(s.seed) || !Number.isInteger(s.rng)) return false;
+  const scenarios = [
+    "",
+    "house-chosen",
+    "last-midnight",
+    "mirror-jury",
+    "heart-beneath",
+  ];
+  const kinds = new Set([
+    "abandon",
+    "betray",
+    "break",
+    "burn",
+    "calm",
+    "check",
+    "clue",
+    "fear",
+    "item",
+    "kind",
+    "mark",
+    "promise",
+    "refuse",
+    "secret",
+    "sit",
+    "touch",
+  ]);
+  const logKinds = new Set(["event", "roll", "discovery", "omen"]);
+  const integerIn = (n: unknown, min: number, max: number) =>
+    Number.isInteger(n) && (n as number) >= min && (n as number) <= max;
+
+  if (
+    s.version !== 1 ||
+    !phases.includes(s.phase as Phase) ||
+    !integerIn(s.seed, 0, 0xffffffff) ||
+    !integerIn(s.rng, 0, 0xffffffff) ||
+    !integerIn(s.current, 0, 3) ||
+    !integerIn(s.ap, 0, 3) ||
+    !integerIn(s.turn, 0, 1_000_000) ||
+    !integerIn(s.pressure, 0, 1000) ||
+    !integerIn(s.attention, 0, 1_000_000) ||
+    !integerIn(s.omens, 0, 1000) ||
+    !scenarios.includes(s.scenario as string) ||
+    !(s.anchor === null || isText(s.anchor, 64)) ||
+    !isText(s.objective) ||
+    (!isText(s.ending, 4096) && s.ending !== "") ||
+    (!isText(s.lastRoll, 512) && s.lastRoll !== "")
+  )
+    return false;
   if (!Array.isArray(s.rooms) || s.rooms.length < 2 || s.rooms.length > 128)
     return false;
   if (!Array.isArray(s.players) || s.players.length < 1 || s.players.length > 4)
     return false;
-  const ids = new Set(s.rooms.map((r) => r?.id));
-  if (
-    ids.size !== s.rooms.length ||
-    s.rooms.some(
-      (r) =>
-        !r ||
-        typeof r.id !== "string" ||
-        typeof r.name !== "string" ||
-        !Number.isFinite(r.x) ||
-        !Number.isFinite(r.y) ||
-        !Number.isInteger(r.floor) ||
-        !Array.isArray(r.links) ||
-        r.links.some((id) => typeof id !== "string"),
+
+  const ids = new Set<string>();
+  const occupied = new Set<string>();
+  for (const room of s.rooms) {
+    if (
+      !isRecord(room) ||
+      !isText(room.id, 64) ||
+      ids.has(room.id) ||
+      !isText(room.template, 64) ||
+      !isText(room.name, 128) ||
+      !integerIn(room.x, -128, 128) ||
+      !integerIn(room.y, -128, 128) ||
+      ![-1, 0, 1].includes(room.floor as number) ||
+      !Array.isArray(room.links) ||
+      room.links.length > 4 ||
+      !room.links.every((id) => isText(id, 64)) ||
+      new Set(room.links).size !== room.links.length ||
+      room.links.includes(room.id) ||
+      typeof room.searched !== "boolean" ||
+      typeof room.secret !== "boolean" ||
+      typeof room.eventDone !== "boolean" ||
+      (room.haunted !== undefined &&
+        !["watcher", "mourner", "wisp"].includes(room.haunted as string))
     )
-  )
-    return false;
-  if (s.rooms.some((r) => r.links.some((id) => !ids.has(id)))) return false;
+      return false;
+    const coordinate = `${room.floor}:${room.x}:${room.y}`;
+    if (occupied.has(coordinate)) return false;
+    occupied.add(coordinate);
+    ids.add(room.id);
+  }
+  for (const room of s.rooms) {
+    for (const linkedId of room.links as string[]) {
+      const linked = s.rooms.find(
+        (candidate) => isRecord(candidate) && candidate.id === linkedId,
+      );
+      if (!linked || !(linked.links as string[]).includes(room.id as string))
+        return false;
+    }
+  }
+  const reached = new Set<string>();
+  const pending = [s.rooms[0].id as string];
+  while (pending.length) {
+    const id = pending.pop()!;
+    if (reached.has(id)) continue;
+    reached.add(id);
+    const room = s.rooms.find((candidate) => candidate.id === id);
+    if (room) pending.push(...(room.links as string[]));
+  }
+  if (reached.size !== s.rooms.length) return false;
+
   if (
-    !Number.isInteger(s.current) ||
-    (s.current as number) < 0 ||
-    (s.current as number) >= s.players.length
+    (s.current as number) >= s.players.length ||
+    !s.players.every((player) => {
+      if (!isRecord(player) || !ids.has(player.roomId as string)) return false;
+      if (
+        !isText(player.id, 64) ||
+        !isText(player.name, 128) ||
+        !isText(player.role, 128) ||
+        !isText(player.bio) ||
+        !isText(player.passive) ||
+        !isText(player.weakness) ||
+        !integerIn(player.hp, 0, 4) ||
+        !integerIn(player.fear, 0, 1000) ||
+        !isTextList(player.items, 256, 128) ||
+        !isRecord(player.stats)
+      )
+        return false;
+      const stats = player.stats;
+      return ["body", "grace", "insight", "nerve"].every((stat) =>
+        integerIn(stats[stat], 0, 20),
+      );
+    })
   )
     return false;
-  if (!Number.isInteger(s.ap) || (s.ap as number) < 0 || (s.ap as number) > 3)
-    return false;
+
   if (
-    !s.players.every(
-      (p) =>
-        p &&
-        typeof p.id === "string" &&
-        ids.has(p.roomId) &&
-        p.stats &&
-        ["body", "grace", "insight", "nerve"].every((k) =>
-          Number.isFinite(p.stats[k as Stat]),
-        ) &&
-        Array.isArray(p.items) &&
-        Number.isInteger(p.hp) &&
-        Number.isInteger(p.fear),
-    )
+    !isTextList(s.clues, 1024, 4096) ||
+    !isTextList(s.flags, 2048, 256) ||
+    !Array.isArray(s.log) ||
+    s.log.length > 50 ||
+    !s.log.every(
+      (entry) =>
+        isRecord(entry) &&
+        isText(entry.text, 4096) &&
+        (entry.kind === undefined || logKinds.has(entry.kind as string)),
+    ) ||
+    (s.event !== null &&
+      (!isRecord(s.event) ||
+        !isText(s.event.id, 128) ||
+        !isText(s.event.title, 256) ||
+        !isText(s.event.text, 4096) ||
+        !Array.isArray(s.event.choices) ||
+        s.event.choices.length < 1 ||
+        s.event.choices.length > 16 ||
+        !s.event.choices.every(
+          (choice) =>
+            isRecord(choice) &&
+            isText(choice.label, 256) &&
+            isText(choice.detail, 1024) &&
+            typeof choice.kind === "string" &&
+            kinds.has(choice.kind) &&
+            (choice.difficulty === undefined ||
+              integerIn(choice.difficulty, 1, 20)) &&
+            (choice.stat === undefined || isStat(choice.stat)),
+        ))) ||
+    (s.mode !== "explore" && s.mode !== "dollhouse") ||
+    !isRecord(s.settings) ||
+    typeof s.settings.reducedMotion !== "boolean" ||
+    typeof s.settings.captions !== "boolean"
   )
     return false;
-  return (
-    Array.isArray(s.log) &&
-    Array.isArray(s.clues) &&
-    Array.isArray(s.flags) &&
-    (s.event === null || (!!s.event && Array.isArray(s.event.choices))) &&
-    (s.mode === "explore" || s.mode === "dollhouse") &&
-    !!s.settings
-  );
+  return true;
 }
 export function loadGame(): GameState | null {
   try {

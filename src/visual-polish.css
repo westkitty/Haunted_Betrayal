@@ -431,3 +431,558 @@
 .avatar-portrait.p5 .avatar-initial {
   display: none;
 }
+
+/* Keep essential actions visible, legible, and reachable without summoning a HUD. */
+.game-shell.immersive .game-layout {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+}
+.game-shell.immersive .game-topbar,
+.game-shell.immersive.hud-open .game-topbar {
+  position: relative;
+  inset: auto;
+  z-index: 12;
+  flex: none;
+  height: 51px;
+  min-height: 51px;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+  padding: 0 14px;
+}
+.game-shell.immersive .scene-header,
+.game-shell.immersive.hud-open .scene-header {
+  height: 58px;
+  min-height: 58px;
+  flex: none;
+  padding: 0 18px;
+  overflow: visible;
+  opacity: 1;
+  pointer-events: auto;
+  border-bottom: 1px solid #343031;
+}
+.game-shell.immersive .action-bar,
+.game-shell.immersive.hud-open .action-bar {
+  height: auto;
+  min-height: 80px;
+  flex: none;
+  overflow: visible;
+  padding: 8px 14px;
+  opacity: 1;
+  pointer-events: auto;
+  border-top: 1px solid #413b39;
+}
+.game-shell.immersive:not(.hud-open) .left-rail,
+.game-shell.immersive:not(.hud-open) .right-rail {
+  opacity: 0;
+  pointer-events: none;
+}
+.game-shell.immersive:not(.hud-open) .game-layout.show-explorer .left-rail,
+.game-shell.immersive:not(.hud-open) .game-layout.show-house .right-rail {
+  opacity: 1;
+  pointer-events: auto;
+}
+.game-shell.immersive .scene-caption,
+.game-shell.immersive .camera-controls,
+.game-shell.immersive .walk-controls,
+.game-shell.immersive .doorway-nav,
+.game-shell.immersive .mini-map {
+  display: flex;
+}
+.game-shell.immersive .mini-map {
+  display: block;
+}
+.game-shell.immersive .controls-hint {
+  display: block;
+}
+.game-shell.immersive .stage-wrap:not(.show-controls) .controls-hint {
+  display: none;
+}
+.game-shell.immersive .immersive-toggle {
+  top: 76px;
+  opacity: 0.82;
+}
+.game-shell.immersive .play-status-strip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  flex: none;
+  padding: 7px 14px;
+  border-top: 1px solid #322e2b;
+  background: #1a1919;
+  color: #c8bdad;
+}
+.play-status-strip > div {
+  min-width: 0;
+  flex: 1;
+}
+.play-status-strip p {
+  margin: 3px 0 0;
+  font: 13px/1.25 "Cormorant Garamond", serif;
+  color: #e1d6c5;
+}
+.play-status-strip .eyebrow {
+  font-size: 8px;
+}
+.play-status-strip .status-pressure {
+  flex: none;
+  color: #d9bd87;
+  font: 9px "DM Mono", monospace;
+}
+.play-status-strip button {
+  flex: none;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid #62523d;
+  background: #25211e;
+  color: #e4d2b2;
+}
+.turn-hint,
+.revelation-hint,
+.ending-action-note {
+  margin: 8px 0;
+  color: #c6b89f;
+  font: 12px/1.4 "Cormorant Garamond", serif;
+}
+.network-note {
+  display: grid;
+  gap: 4px;
+  max-width: 250px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-left: 2px solid #80674a;
+  background: #211e1d;
+  color: #d1c3ae;
+  font: 12px/1.4 "Cormorant Garamond", serif;
+}
+.network-note span {
+  color: #a99d8c;
+  font: 9px/1.4 "DM Mono", monospace;
+}
+.stage-error {
+  position: absolute;
+  z-index: 3;
+  inset: 22% 18% auto;
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid #9e8054;
+  background: #191719ed;
+  color: #e5d5bb;
+  text-align: center;
+}
+.stage-error span {
+  color: #c6baa8;
+  font: 14px/1.4 "Cormorant Garamond", serif;
+}
+.map-room {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.map-room::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  border: 1px solid #ccb27c;
+  border-radius: 1px;
+  background: #35302b;
+}
+.map-room.occupied::before {
+  background: #dbb978;
+  box-shadow: 0 0 8px #d7ad56;
+}
+.map-room.haunted::before {
+  border-color: #79d4dc;
+  box-shadow: 0 0 8px #6fdae0;
+}
+.map-room:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid #f0cd83;
+  outline-offset: 3px;
+}
+
+@media (max-width: 790px) {
+  .game-shell.immersive .game-topbar,
+  .game-shell.immersive.hud-open .game-topbar {
+    height: auto;
+    min-height: 52px;
+    padding: 5px 8px;
+    gap: 6px;
+  }
+  .game-shell.immersive .top-meta {
+    max-width: calc(100vw - 140px);
+    gap: 10px;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: thin;
+  }
+  .game-shell.immersive .top-meta > span:nth-child(2) {
+    display: flex;
+  }
+  .game-shell.immersive .top-action {
+    flex: none;
+    font-size: 8px;
+    padding: 8px 2px;
+  }
+  .game-shell.immersive .scene-header,
+  .game-shell.immersive.hud-open .scene-header {
+    height: 52px;
+    min-height: 52px;
+    padding: 0 10px;
+  }
+  .game-shell.immersive .play-status-strip {
+    min-height: 60px;
+    gap: 8px;
+    padding: 6px 9px;
+  }
+  .play-status-strip .status-pressure {
+    max-width: 112px;
+    white-space: normal;
+    line-height: 1.4;
+  }
+  .play-status-strip button {
+    padding: 7px;
+    font-size: 10px;
+  }
+  .game-shell.immersive .action-bar,
+  .game-shell.immersive.hud-open .action-bar {
+    min-height: 74px;
+    padding: 7px;
+  }
+  .game-shell.immersive .center-stage {
+    height: 100%;
+  }
+  .game-shell.immersive .immersive-toggle {
+    top: 58px;
+    left: 8px;
+  }
+  .game-shell.immersive .stage-wrap {
+    min-height: 200px;
+  }
+  .game-shell.immersive .action-button {
+    min-width: 46%;
+  }
+  .game-shell.immersive .action-button > span {
+    font-size: 11px;
+  }
+  .game-shell.immersive .action-button small {
+    font-size: 8px;
+  }
+}
+@media (max-width: 450px) {
+  .game-shell.immersive .game-topbar .brand-mark {
+    gap: 5px;
+    font-size: 7px;
+  }
+  .game-shell.immersive .game-topbar .seal {
+    width: 24px;
+    height: 24px;
+  }
+  .game-shell.immersive .top-meta {
+    max-width: calc(100vw - 120px);
+    gap: 8px;
+  }
+  .game-shell.immersive .top-action {
+    font-size: 7px;
+  }
+  .play-status-strip p {
+    font-size: 11px;
+  }
+  .play-status-strip .status-pressure {
+    max-width: 90px;
+    font-size: 8px;
+  }
+  .game-shell.immersive .action-button > span {
+    font-size: 10px;
+  }
+}
+
+/* Keep essential expedition navigation visible; only optional scene hints collapse. */
+.game-shell.immersive .game-layout {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+}
+.game-shell.immersive .game-topbar,
+.game-shell.immersive.hud-open .game-topbar {
+  position: relative;
+  inset: auto;
+  z-index: 12;
+  flex: none;
+  height: 51px;
+  min-height: 51px;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+  padding: 0 14px;
+}
+.game-shell.immersive .scene-header,
+.game-shell.immersive.hud-open .scene-header {
+  height: 58px;
+  min-height: 58px;
+  flex: none;
+  padding: 0 18px;
+  overflow: visible;
+  opacity: 1;
+  pointer-events: auto;
+  border-bottom: 1px solid #343031;
+}
+.game-shell.immersive .action-bar,
+.game-shell.immersive.hud-open .action-bar {
+  height: auto;
+  min-height: 80px;
+  flex: none;
+  overflow: visible;
+  padding: 8px 14px;
+  opacity: 1;
+  pointer-events: auto;
+  border-top: 1px solid #413b39;
+}
+.game-shell.immersive:not(.hud-open) .left-rail,
+.game-shell.immersive:not(.hud-open) .right-rail {
+  opacity: 0;
+  pointer-events: none;
+}
+.game-shell.immersive:not(.hud-open) .game-layout.show-explorer .left-rail,
+.game-shell.immersive:not(.hud-open) .game-layout.show-house .right-rail {
+  opacity: 1;
+  pointer-events: auto;
+}
+.game-shell.immersive .scene-caption,
+.game-shell.immersive .camera-controls,
+.game-shell.immersive .walk-controls,
+.game-shell.immersive .doorway-nav,
+.game-shell.immersive .mini-map {
+  display: flex;
+}
+.game-shell.immersive .mini-map {
+  display: block;
+}
+.game-shell.immersive .controls-hint {
+  display: block;
+}
+.game-shell.immersive .stage-wrap:not(.show-controls) .controls-hint {
+  display: none;
+}
+.game-shell.immersive .immersive-toggle {
+  top: 76px;
+  opacity: 0.82;
+}
+.game-shell.immersive .play-status-strip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  flex: none;
+  padding: 7px 14px;
+  border-top: 1px solid #322e2b;
+  background: #1a1919;
+  color: #c8bdad;
+}
+.play-status-strip > div {
+  min-width: 0;
+  flex: 1;
+}
+.play-status-strip p {
+  margin: 3px 0 0;
+  font: 13px/1.25 "Cormorant Garamond", serif;
+  color: #e1d6c5;
+}
+.play-status-strip .eyebrow {
+  font-size: 8px;
+}
+.play-status-strip .status-pressure {
+  flex: none;
+  color: #d9bd87;
+  font: 9px "DM Mono", monospace;
+}
+.play-status-strip button {
+  flex: none;
+  padding: 7px 10px;
+  border: 1px solid #62523d;
+  background: #25211e;
+  color: #e4d2b2;
+}
+.turn-hint {
+  margin: 8px 0;
+  color: #b1a590;
+  font: 11px/1.4 "Cormorant Garamond", serif;
+}
+.network-note {
+  display: grid;
+  gap: 4px;
+  max-width: 250px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-left: 2px solid #80674a;
+  background: #211e1d;
+  color: #d1c3ae;
+  font: 12px/1.4 "Cormorant Garamond", serif;
+}
+.network-note span {
+  color: #a99d8c;
+  font: 9px/1.4 "DM Mono", monospace;
+}
+.stage-error {
+  position: absolute;
+  z-index: 3;
+  inset: 22% 18% auto;
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid #9e8054;
+  background: #191719ed;
+  color: #e5d5bb;
+  text-align: center;
+}
+.stage-error span {
+  color: #c6baa8;
+  font: 14px/1.4 "Cormorant Garamond", serif;
+}
+.map-room:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid #f0cd83;
+  outline-offset: 3px;
+}
+
+@media (max-width: 790px) {
+  .game-shell.immersive .game-topbar,
+  .game-shell.immersive.hud-open .game-topbar {
+    height: auto;
+    min-height: 52px;
+    padding: 5px 8px;
+    gap: 6px;
+  }
+  .game-shell.immersive .top-meta {
+    max-width: calc(100vw - 140px);
+    gap: 10px;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: thin;
+  }
+  .game-shell.immersive .top-meta > span:nth-child(2) {
+    display: flex;
+  }
+  .game-shell.immersive .top-action {
+    flex: none;
+    font-size: 8px;
+    padding: 8px 2px;
+  }
+  .game-shell.immersive .scene-header,
+  .game-shell.immersive.hud-open .scene-header {
+    height: 52px;
+    min-height: 52px;
+    padding: 0 10px;
+  }
+  .game-shell.immersive .play-status-strip {
+    min-height: 60px;
+    gap: 8px;
+    padding: 6px 9px;
+  }
+  .play-status-strip .status-pressure {
+    max-width: 112px;
+    white-space: normal;
+    line-height: 1.4;
+  }
+  .play-status-strip button {
+    padding: 7px;
+    font-size: 10px;
+  }
+  .game-shell.immersive .action-bar,
+  .game-shell.immersive.hud-open .action-bar {
+    min-height: 74px;
+    padding: 7px;
+  }
+  .game-shell.immersive .center-stage {
+    height: 100%;
+  }
+  .game-shell.immersive .immersive-toggle {
+    top: 58px;
+    left: 8px;
+  }
+}
+@media (max-width: 450px) {
+  .game-shell.immersive .game-topbar .brand-mark {
+    gap: 5px;
+    font-size: 7px;
+  }
+  .game-shell.immersive .game-topbar .seal {
+    width: 24px;
+    height: 24px;
+  }
+  .game-shell.immersive .top-meta {
+    max-width: calc(100vw - 120px);
+    gap: 8px;
+  }
+  .game-shell.immersive .top-action {
+    font-size: 7px;
+  }
+  .play-status-strip p {
+    font-size: 11px;
+  }
+  .play-status-strip .status-pressure {
+    max-width: 90px;
+    font-size: 8px;
+  }
+}
+.action-reason {
+  display: block;
+  margin-top: 5px;
+  color: #c4b49a;
+  font: 8px/1.35 "DM Mono", monospace;
+}
+.import-confirm-modal > p {
+  color: #c9bead;
+  font: 15px/1.45 "Cormorant Garamond", serif;
+}
+.import-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+.import-confirm-actions button {
+  min-height: 42px;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.toast-dismiss {
+  display: grid;
+  place-items: center;
+  flex: none;
+  min-width: 32px;
+  min-height: 32px;
+  border: 1px solid #a78a5d;
+  background: #211e1c;
+  color: #f0dfc1;
+}
+.setting-note {
+  margin: -4px 0 12px;
+  color: #d9c59f;
+  font: 11px/1.45 "DM Mono", monospace;
+}
