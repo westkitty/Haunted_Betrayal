@@ -62,6 +62,8 @@ function App() {
   const [importMessage, setImportMessage] = useState("");
   const [seed, setSeed] = useState("");
   const [showJournal, setShowJournal] = useState(false);
+  const [showExplorer, setShowExplorer] = useState(false);
+  const [showHouse, setShowHouse] = useState(false);
   const update = (action: string, payload?: string) =>
     setGame((g) => (g ? act(g, action, payload) : g));
   useEffect(() => {
@@ -473,6 +475,28 @@ function App() {
           <span>
             <Clock3 size={14} /> WATCH {String(game.turn).padStart(2, "0")}
           </span>
+          <button
+            aria-label="Toggle explorer details"
+            aria-expanded={showExplorer}
+            className={`top-action drawer-trigger ${showExplorer ? "selected" : ""}`}
+            onClick={() => {
+              setShowExplorer(!showExplorer);
+              setShowHouse(false);
+            }}
+          >
+            <Eye size={15} /> <span>EXPLORER</span>
+          </button>
+          <button
+            aria-label="Toggle house details"
+            aria-expanded={showHouse}
+            className={`top-action drawer-trigger ${showHouse ? "selected" : ""}`}
+            onClick={() => {
+              setShowHouse(!showHouse);
+              setShowExplorer(false);
+            }}
+          >
+            <Flame size={15} /> <span>THE HOUSE</span>
+          </button>
           <button className="top-action" onClick={() => setShowJournal(true)}>
             <BookOpen size={15} /> JOURNAL <b>{game.clues.length}</b>
           </button>
@@ -497,10 +521,19 @@ function App() {
           </button>
         </div>
       </header>
-      <section className="game-layout">
+      <section
+        className={`game-layout ${showExplorer ? "show-explorer" : ""} ${showHouse ? "show-house" : ""}`}
+      >
         <aside className="left-rail">
           <div className="rail-title">
             THE EXPLORER <span className="active-dot" />
+            <button
+              className="panel-close"
+              aria-label="Close explorer details"
+              onClick={() => setShowExplorer(false)}
+            >
+              <X size={14} />
+            </button>
           </div>
           <div
             className={`avatar-portrait p${CHARACTERS.findIndex((c) => c.id === player.id)}`}
@@ -712,6 +745,13 @@ function App() {
           <div className="rail-title">
             THE HOUSE’S ATTENTION{" "}
             <span className="attention-number">{game.attention}</span>
+            <button
+              className="panel-close"
+              aria-label="Close house details"
+              onClick={() => setShowHouse(false)}
+            >
+              <X size={14} />
+            </button>
           </div>
           <div className="pressure-meter">
             <div className="pressure-track">

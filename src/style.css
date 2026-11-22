@@ -2182,3 +2182,83 @@ input:focus-visible {
     padding: 26px 20px;
   }
 }
+
+/* Keep the play surface dominant; details drawers only appear when requested. */
+.game-layout {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.center-stage {
+  width: 100%;
+  height: 100%;
+}
+.left-rail,
+.right-rail {
+  position: absolute;
+  z-index: 7;
+  top: 0;
+  bottom: 0;
+  width: min(270px, calc(100vw - 28px));
+  max-height: 100%;
+  box-shadow: 0 14px 42px #0009;
+  transition:
+    transform 220ms ease,
+    opacity 180ms ease;
+  opacity: 0;
+  pointer-events: none;
+}
+.left-rail {
+  left: 0;
+  transform: translateX(calc(-100% - 12px));
+}
+.right-rail {
+  right: 0;
+  left: auto;
+  width: min(310px, calc(100vw - 28px));
+  transform: translateX(calc(100% + 12px));
+}
+.game-layout.show-explorer .left-rail,
+.game-layout.show-house .right-rail {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+.drawer-trigger.selected {
+  color: var(--gold2);
+}
+.panel-close {
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  padding: 3px;
+  border: 0;
+  background: transparent;
+  color: #b9aa92;
+}
+@media (max-width: 790px) {
+  .game-shell {
+    height: 100dvh;
+    min-height: 560px;
+    overflow: hidden;
+  }
+  .game-layout {
+    display: block;
+    height: calc(100dvh - 48px);
+    min-height: 0;
+  }
+  .center-stage {
+    min-height: 0;
+    height: 100%;
+  }
+  .left-rail,
+  .right-rail {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    overflow: auto;
+    width: min(86vw, 310px);
+  }
+}

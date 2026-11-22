@@ -38,6 +38,15 @@ function box(
   o.receiveShadow = true;
   return o;
 }
+function addCutawayWall(
+  group: THREE.Group,
+  side: string,
+  mesh: THREE.Mesh,
+  height: number,
+) {
+  mesh.userData.cutaway = { side, baseY: mesh.position.y, height };
+  group.add(mesh);
+}
 function makeRoom(room: any, center: THREE.Vector3, scene: THREE.Object3D) {
   const group = new THREE.Group();
   group.position.copy(center);
@@ -45,11 +54,36 @@ function makeRoom(room: any, center: THREE.Vector3, scene: THREE.Object3D) {
   group.add(box(size, 0.18, size, floorMat, 0, 0.08, 0));
   // perimeter walls with open doorway at the north edge; distinct heights convey dollhouse cutaway
   const h = room.template === "ballroom" ? 3.3 : 2.7;
-  group.add(box(size, 0.18, 0.12, wood, 0, h, -size / 2));
-  group.add(box(0.12, h, size, wood, -size / 2, h / 2, 0));
-  group.add(box(0.12, h, size, wood, size / 2, h / 2, 0));
-  group.add(box(1.4, h, 0.12, wood, -1.55, h / 2, size / 2));
-  group.add(box(1.4, h, 0.12, wood, 1.55, h / 2, size / 2));
+  addCutawayWall(
+    group,
+    "north",
+    box(size, 0.18, 0.12, wood, 0, h, -size / 2),
+    0.18,
+  );
+  addCutawayWall(
+    group,
+    "west",
+    box(0.12, h, size, wood, -size / 2, h / 2, 0),
+    h,
+  );
+  addCutawayWall(
+    group,
+    "east",
+    box(0.12, h, size, wood, size / 2, h / 2, 0),
+    h,
+  );
+  addCutawayWall(
+    group,
+    "south",
+    box(1.4, h, 0.12, wood, -1.55, h / 2, size / 2),
+    h,
+  );
+  addCutawayWall(
+    group,
+    "south",
+    box(1.4, h, 0.12, wood, 1.55, h / 2, size / 2),
+    h,
+  );
   // wallpaper panels and trim
   for (let i = -1; i <= 1; i++) {
     group.add(
@@ -388,6 +422,30 @@ export default function Stage({
       );
       camera.position.lerp(desiredCam, 0.045);
       camera.lookAt(target);
+      for (const [id, roomGroup] of roomsById) {
+        const dx = camera.position.x - roomGroup.position.x;
+        const dz = camera.position.z - roomGroup.position.z;
+        const frontSide =
+          Math.abs(dx) > Math.abs(dz)
+            ? dx > 0
+              ? "east"
+              : "west"
+            : dz > 0
+              ? "south"
+              : "north";
+        for (const part of roomGroup.children) {
+          const cut = part.userData.cutaway as
+            { side: string; baseY: number; height: number } | undefined;
+          if (!cut) continue;
+          const shouldFold =
+            state.mode === "dollhouse" || cut.side === frontSide;
+          const foldedScale = shouldFold ? 0.025 : 1;
+          const foldEase = state.settings.reducedMotion ? 1 : 0.16;
+          part.scale.y += (foldedScale - part.scale.y) * foldEase;
+          part.position.y = cut.baseY - (cut.height * (1 - part.scale.y)) / 2;
+          part.visible = part.scale.y > 0.035;
+        }
+      }
       dust.rotation.y += 0.0003;
       renderer.render(scene, camera);
     };
