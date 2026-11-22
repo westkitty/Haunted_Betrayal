@@ -71,18 +71,42 @@ function makePatternTexture(base: string, accent: string, floor = false) {
   texture.anisotropy = 4;
   return texture;
 }
-const wallPalettes = [
+const wallPaletteDefs = [
   ["#69554c", "#c3a477"],
   ["#38444b", "#b29a71"],
   ["#60474f", "#c29c83"],
   ["#4b5547", "#c6ae7b"],
   ["#5b4b61", "#d0b58a"],
   ["#74684f", "#dbc38f"],
-].map(
+];
+const wallTints = [0xe3d4b8, 0xc7d8d6, 0xe2c3bc, 0xcbd9b5, 0xd3c3df, 0xe0d5b8];
+let wallPalettes: THREE.MeshStandardMaterial[] = [];
+const damaskTexture = new THREE.TextureLoader().load(
+  `${import.meta.env.BASE_URL}textures/house-damask.webp`,
+  (texture) => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1.35, 1.1);
+    texture.anisotropy = 4;
+    wallPalettes.forEach((material, index) => {
+      const fallbackTexture = material.map;
+      material.map = texture;
+      material.bumpMap = texture;
+      if (fallbackTexture && fallbackTexture !== texture)
+        fallbackTexture.dispose();
+      material.bumpScale = 0.012;
+      material.color.setHex(wallTints[index]);
+      material.needsUpdate = true;
+    });
+  },
+);
+damaskTexture.wrapS = damaskTexture.wrapT = THREE.RepeatWrapping;
+damaskTexture.repeat.set(1.35, 1.1);
+wallPalettes = wallPaletteDefs.map(
   ([base, accent]) =>
     new THREE.MeshStandardMaterial({
       map: makePatternTexture(base, accent),
-      roughness: 0.92,
+      roughness: 0.94,
     }),
 );
 floorMat.map = makePatternTexture("#4b352e", "#82664b", true);
