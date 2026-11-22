@@ -2,6 +2,9 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { Crosshair, Minus, Plus } from "lucide-react";
 import type { GameState } from "./game";
+const ROOM_FLOOR_TOP = 0.17;
+const FIGURE_BASE_HEIGHT = 0.08;
+const FIGURE_ROOT_Y = ROOM_FLOOR_TOP + FIGURE_BASE_HEIGHT;
 const wood = new THREE.MeshStandardMaterial({
     color: 0x32221d,
     roughness: 0.84,
@@ -109,6 +112,104 @@ wallPalettes = wallPaletteDefs.map(
       roughness: 0.94,
     }),
 );
+function makePortraitFallback(background: string, coat: string, hair: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 168;
+  const ctx = canvas.getContext("2d")!;
+  const wash = ctx.createLinearGradient(0, 0, 128, 168);
+  wash.addColorStop(0, background);
+  wash.addColorStop(1, "#171719");
+  ctx.fillStyle = wash;
+  ctx.fillRect(0, 0, 128, 168);
+  ctx.fillStyle = "#b79b6c22";
+  for (let y = 10; y < 168; y += 20) ctx.fillRect(0, y, 128, 1);
+  ctx.fillStyle = coat;
+  ctx.beginPath();
+  ctx.moveTo(8, 168);
+  ctx.quadraticCurveTo(16, 112, 47, 103);
+  ctx.lineTo(81, 103);
+  ctx.quadraticCurveTo(114, 116, 122, 168);
+  ctx.fill();
+  ctx.fillStyle = "#d2b99a";
+  ctx.beginPath();
+  ctx.ellipse(64, 62, 23, 31, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = hair;
+  ctx.beginPath();
+  ctx.ellipse(64, 43, 27, 24, 0, Math.PI, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(38, 41, 7, 29);
+  ctx.fillRect(83, 41, 7, 29);
+  ctx.fillStyle = "#362923";
+  ctx.fillRect(53, 64, 3, 2);
+  ctx.fillRect(72, 64, 3, 2);
+  ctx.strokeStyle = "#e0c98d";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(64, 122);
+  ctx.lineTo(64, 146);
+  ctx.stroke();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+const portraitFallbacks = [
+  makePortraitFallback("#29413c", "#242328", "#171414"),
+  makePortraitFallback("#50313a", "#153633", "#281b18"),
+  makePortraitFallback("#34434a", "#68707a", "#392c25"),
+];
+const portraitMaterials = portraitFallbacks.map(
+  (map) =>
+    new THREE.MeshStandardMaterial({
+      map,
+      color: 0xe8dfd1,
+      emissive: 0x21170f,
+      emissiveIntensity: 0.22,
+      roughness: 0.96,
+    }),
+);
+const portraitFiles = [
+  "portrait-ancestor.webp",
+  "portrait-heir.webp",
+  "portrait-child.webp",
+];
+portraitFiles.forEach((file, index) => {
+  new THREE.TextureLoader().load(
+    `${import.meta.env.BASE_URL}textures/${file}`,
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 4;
+      const fallback = portraitMaterials[index].map;
+      portraitMaterials[index].map = texture;
+      portraitMaterials[index].needsUpdate = true;
+      if (fallback && fallback !== texture) fallback.dispose();
+    },
+  );
+});
+function addPortrait(group: THREE.Group, x: number, y: number, index: number) {
+  const z = -2.08;
+  group.add(box(0.74, 0.94, 0.13, wood, x, y, z));
+  const canvas = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.56, 0.72),
+    portraitMaterials[index % portraitMaterials.length],
+  );
+  canvas.position.set(x, y, -2.005);
+  canvas.castShadow = false;
+  canvas.receiveShadow = false;
+  group.add(canvas);
+  const frameZ = -1.975;
+  group.add(
+    box(0.075, 0.9, 0.14, gold, x - 0.32, y, frameZ),
+    box(0.075, 0.9, 0.14, gold, x + 0.32, y, frameZ),
+    box(0.7, 0.075, 0.14, gold, x, y - 0.405, frameZ),
+    box(0.7, 0.075, 0.14, gold, x, y + 0.405, frameZ),
+  );
+  const crest = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), gold);
+  crest.position.set(x, y + 0.445, -1.91);
+  group.add(crest);
+}
 floorMat.map = makePatternTexture("#4b352e", "#82664b", true);
 const grainCanvas = document.createElement("canvas");
 grainCanvas.width = 256;
@@ -483,10 +584,7 @@ function makeRoom(
     }
     group.add(box(2, 0.08, 0.3, cyan, 0, 1.9, -2.1));
   } else if (t === "gallery" || t === "chapel" || t === "parlor") {
-    for (let i = 0; i < 3; i++) {
-      group.add(box(0.65, 0.85, 0.09, red, -1.35 + i * 1.35, 1.72, -2.1));
-      group.add(box(0.46, 0.59, 0.04, gold, -1.35 + i * 1.35, 1.72, -2.02));
-    }
+    for (let i = 0; i < 3; i++) addPortrait(group, -1.35 + i * 1.35, 1.72, i);
     group.add(box(1.25, 0.8, 0.62, wood, 0, 0.5, 0.3));
   } else if (t === "observatory") {
     const tripodMat = new THREE.MeshStandardMaterial({
@@ -1125,6 +1223,25 @@ export default function Stage({
     if (walk.current.roomId !== current.id)
       walk.current = { roomId: current.id, x: 0, z: 0 };
     const avatar = new THREE.Group();
+    const plinth = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.37, 0.37, FIGURE_BASE_HEIGHT, 16),
+      new THREE.MeshStandardMaterial({
+        color: 0x272322,
+        metalness: 0.18,
+        roughness: 0.72,
+      }),
+    );
+    plinth.position.y = -FIGURE_BASE_HEIGHT / 2;
+    plinth.castShadow = true;
+    plinth.receiveShadow = true;
+    avatar.add(plinth);
+    const plinthRim = new THREE.Mesh(
+      new THREE.TorusGeometry(0.335, 0.018, 6, 24),
+      gold,
+    );
+    plinthRim.rotation.x = Math.PI / 2;
+    plinthRim.position.y = -0.004;
+    avatar.add(plinthRim);
     const outfitColor: Record<string, number> = {
       ada: 0x3d4a53,
       mara: 0x435755,
@@ -1299,7 +1416,11 @@ export default function Stage({
     const lantern = new THREE.PointLight(0xffbf65, 1.1, 4);
     lantern.position.set(0.3, 1, 0.3);
     avatar.add(lantern);
-    avatar.position.set(cp.x + walk.current.x, cp.y, cp.z + walk.current.z);
+    avatar.position.set(
+      cp.x + walk.current.x,
+      cp.y + FIGURE_ROOT_Y,
+      cp.z + walk.current.z,
+    );
     mansion.add(avatar);
     // hover details and dust motes
     const dustGeo = new THREE.BufferGeometry();
@@ -1438,12 +1559,17 @@ export default function Stage({
         )
           walk.current.z = nz;
         else velocityZ = 0;
-        avatar.position.set(cp.x + walk.current.x, cp.y, cp.z + walk.current.z);
+        avatar.position.set(
+          cp.x + walk.current.x,
+          cp.y + FIGURE_ROOT_Y,
+          cp.z + walk.current.z,
+        );
         const pace = Math.hypot(velocityX, velocityZ);
         const gait = Math.min(1, pace / 1.25);
         const stride = Math.sin(clock.elapsedTime * 10.5) * gait;
         avatar.position.y =
           cp.y +
+          FIGURE_ROOT_Y +
           Math.sin(clock.elapsedTime * 21) * 0.014 * gait +
           Math.sin(clock.elapsedTime * 1.8) * 0.012;
         body.rotation.z = Math.sin(clock.elapsedTime * 5.2) * 0.018 * gait;
@@ -1458,7 +1584,8 @@ export default function Stage({
       } else {
         velocityX = 0;
         velocityZ = 0;
-        avatar.position.y = cp.y + Math.sin(clock.elapsedTime * 1.8) * 0.012;
+        avatar.position.y =
+          cp.y + FIGURE_ROOT_Y + Math.sin(clock.elapsedTime * 1.8) * 0.012;
         body.rotation.z = 0;
         arms[0].rotation.x = Math.sin(clock.elapsedTime * 1.4) * 0.025;
         arms[1].rotation.x = -Math.sin(clock.elapsedTime * 1.4) * 0.025;
@@ -1600,7 +1727,7 @@ export default function Stage({
       if (!blocked(nx, nz) || blocked(walk.current.x, walk.current.z)) {
         walk.current.x = nx;
         walk.current.z = nz;
-        avatar.position.set(cp.x + nx, cp.y, cp.z + nz);
+        avatar.position.set(cp.x + nx, cp.y + FIGURE_ROOT_Y, cp.z + nz);
       }
     };
     cameraActions.current.zoom = (delta) => setZoom(zoom + delta);
