@@ -1,0 +1,169 @@
+/* Art-directed finishing pass: aged brass, oxblood velvet, and readable candlelit glass. */
+:root {
+  --gold: #c3a16b;
+  --gold2: #e6cc98;
+  --dim: #a0988d;
+  --panel: #1b1919;
+}
+
+.game-shell.immersive {
+  background: radial-gradient(
+    ellipse at 50% 45%,
+    #252327 0%,
+    #151516 66%,
+    #0d0d0f 100%
+  );
+}
+.game-shell.immersive .center-stage {
+  background: transparent;
+}
+.game-shell.immersive .stage-wrap {
+  background: radial-gradient(
+    ellipse at 50% 48%,
+    #313137 0%,
+    #1a1b20 62%,
+    #111215 100%
+  );
+  isolation: isolate;
+}
+.game-shell.immersive .stage-wrap::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      #07070832,
+      transparent 22%,
+      transparent 78%,
+      #07070855
+    ),
+    radial-gradient(ellipse at 50% 48%, transparent 48%, #06070845 100%);
+}
+.game-shell.immersive .stage {
+  filter: saturate(0.94) contrast(1.035);
+}
+.game-shell.immersive .stage canvas {
+  position: relative;
+  z-index: 0;
+}
+.game-shell.immersive .scene-caption,
+.game-shell.immersive .controls-hint,
+.game-shell.immersive .walk-controls,
+.game-shell.immersive .doorway-nav,
+.game-shell.immersive .mini-map {
+  z-index: 2;
+}
+.game-shell.immersive .scene-caption,
+.game-shell.immersive .controls-hint,
+.game-shell.immersive .camera-controls,
+.game-shell.immersive .doorway-nav button,
+.game-shell.immersive .mini-map {
+  border-color: #c9ab7652;
+  background-color: #171513c9;
+  box-shadow:
+    0 8px 28px #0005,
+    inset 0 1px #ffffff10;
+  backdrop-filter: blur(10px) saturate(0.8);
+}
+.game-shell.immersive .doorway-nav button {
+  border-radius: 3px;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.game-shell.immersive .doorway-nav button:hover:not(:disabled) {
+  transform: translateX(3px);
+  box-shadow:
+    0 4px 18px #0007,
+    inset 0 0 18px #d4ad6720;
+}
+.game-shell.immersive .walk-controls button,
+.game-shell.immersive .camera-controls button {
+  border-radius: 4px;
+  background: linear-gradient(145deg, #2c2823dd, #171616e8);
+  box-shadow:
+    0 4px 14px #0007,
+    inset 0 1px #fff1;
+  transition:
+    transform 120ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+.game-shell.immersive .walk-controls button:active,
+.game-shell.immersive .camera-controls button:active {
+  transform: translateY(1px) scale(0.96);
+}
+.game-shell.immersive .walk-controls button:hover,
+.game-shell.immersive .camera-controls button:hover {
+  border-color: var(--gold2);
+  color: #fff0d0;
+}
+.game-shell.immersive .action-bar {
+  background: linear-gradient(180deg, #211f1e, #171617);
+  box-shadow: 0 -12px 40px #0005;
+}
+.game-shell.immersive .action-button {
+  border-radius: 4px;
+  background: linear-gradient(145deg, #2c2927, #211f1e);
+  box-shadow:
+    inset 0 1px #ffffff0c,
+    0 3px 12px #0003;
+  transition:
+    transform 150ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+.game-shell.immersive .action-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: #d0ad72;
+  background: linear-gradient(145deg, #393128, #25211e);
+  box-shadow:
+    inset 0 1px #ffffff12,
+    0 8px 22px #0005;
+}
+.game-shell.immersive .action-button:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+}
+.game-shell.immersive .left-rail,
+.game-shell.immersive .right-rail {
+  background:
+    linear-gradient(155deg, #282322f7, #191819fa 68%),
+    radial-gradient(ellipse at 15% 0%, #80604422, transparent 60%);
+  border-color: #9c805444;
+  backdrop-filter: blur(16px) saturate(0.82);
+}
+.immersive-toggle {
+  width: 34px;
+  height: 34px;
+  opacity: 0.42;
+  border-color: #e5cb9380;
+  box-shadow:
+    0 3px 14px #0006,
+    inset 0 1px #fff2;
+}
+.immersive-toggle:hover,
+.immersive-toggle:focus-visible,
+.hud-open .immersive-toggle {
+  transform: scale(1.04);
+  box-shadow:
+    0 0 18px #d2b47a40,
+    0 3px 14px #0008;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

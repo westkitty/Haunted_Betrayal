@@ -43,6 +43,7 @@ import {
   X,
 } from "lucide-react";
 import "./style.css";
+import "./visual-polish.css";
 function App() {
   const [game, setGame] = useState<GameState | null>(null);
   const [screen, setScreen] = useState<

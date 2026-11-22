@@ -115,6 +115,61 @@ wood.map = woodTexture;
 wood.color.set(0xffffff);
 floorMat.needsUpdate = true;
 wood.needsUpdate = true;
+const feltCanvas = document.createElement("canvas");
+feltCanvas.width = feltCanvas.height = 256;
+const feltCtx = feltCanvas.getContext("2d")!;
+feltCtx.fillStyle = "#1d2422";
+feltCtx.fillRect(0, 0, 256, 256);
+for (let i = 0; i < 1800; i++) {
+  const x = (i * 97) % 256;
+  const y = (i * 151) % 256;
+  feltCtx.fillStyle = i % 4 ? "#71806d12" : "#0b111015";
+  feltCtx.fillRect(x, y, 1 + (i % 3), 1);
+}
+for (let y = 0; y < 256; y += 4) {
+  feltCtx.strokeStyle = y % 8 ? "#89918408" : "#080d0c12";
+  feltCtx.beginPath();
+  feltCtx.moveTo(0, y);
+  feltCtx.lineTo(256, y + 3);
+  feltCtx.stroke();
+}
+const feltTexture = new THREE.CanvasTexture(feltCanvas);
+feltTexture.colorSpace = THREE.SRGBColorSpace;
+feltTexture.wrapS = feltTexture.wrapT = THREE.RepeatWrapping;
+feltTexture.repeat.set(58, 58);
+feltTexture.anisotropy = 4;
+const feltMaterial = new THREE.MeshStandardMaterial({
+  map: feltTexture,
+  color: 0xb8c1ad,
+  roughness: 0.98,
+});
+const carpetCanvas = document.createElement("canvas");
+carpetCanvas.width = carpetCanvas.height = 256;
+const carpetCtx = carpetCanvas.getContext("2d")!;
+carpetCtx.fillStyle = "#493039";
+carpetCtx.fillRect(0, 0, 256, 256);
+carpetCtx.strokeStyle = "#b28d5b";
+carpetCtx.globalAlpha = 0.52;
+carpetCtx.lineWidth = 3;
+for (let x = -128; x <= 256; x += 32) {
+  carpetCtx.beginPath();
+  carpetCtx.moveTo(x, 0);
+  carpetCtx.lineTo(x + 128, 128);
+  carpetCtx.lineTo(x, 256);
+  carpetCtx.stroke();
+}
+carpetCtx.globalAlpha = 0.75;
+for (let x = 16; x < 256; x += 32)
+  for (let y = 16; y < 256; y += 32) {
+    carpetCtx.beginPath();
+    carpetCtx.arc(x, y, 4, 0, Math.PI * 2);
+    carpetCtx.fillStyle = "#d2b17a";
+    carpetCtx.fill();
+  }
+carpetCtx.globalAlpha = 1;
+const carpetTexture = new THREE.CanvasTexture(carpetCanvas);
+carpetTexture.colorSpace = THREE.SRGBColorSpace;
+carpetTexture.anisotropy = 4;
 function box(
   w: number,
   h: number,
@@ -147,6 +202,8 @@ function makeRoom(
   illuminate: boolean,
 ) {
   const group = new THREE.Group();
+  const flames: THREE.Object3D[] = [];
+  group.userData.flames = flames;
   group.position.copy(center);
   const size = 4.5;
   const h = room.template === "ballroom" ? 3.3 : 2.7;
@@ -158,7 +215,19 @@ function makeRoom(
           .reduce((n, c) => n + c.charCodeAt(0), 0),
       ) % wallPalettes.length
     ];
-  group.add(box(size, 0.18, size, floorMat, 0, 0.08, 0));
+  const floorTone =
+    room.template === "chapel"
+      ? 0xc9a5a0
+      : room.template === "flooded"
+        ? 0x91b5b1
+        : room.template === "conservatory"
+          ? 0xc2c59e
+          : room.floor > 0
+            ? 0xc9b993
+            : 0xbda58d;
+  const roomFloor = floorMat.clone();
+  roomFloor.color.setHex(floorTone);
+  group.add(box(size, 0.18, size, roomFloor, 0, 0.08, 0));
   // Each face has an actual door opening; linked doors are open, unused exits stay shut.
   const doorWidth = 1.55,
     segment = (size - doorWidth) / 2,
@@ -293,7 +362,8 @@ function makeRoom(
   const rug = new THREE.Mesh(
     new THREE.PlaneGeometry(2.1, 1.35),
     new THREE.MeshStandardMaterial({
-      color: room.template === "chapel" ? 0x5b272b : 0x49323b,
+      map: carpetTexture,
+      color: room.template === "chapel" ? 0xe2a876 : 0xb6a1ad,
       roughness: 0.98,
     }),
   );
@@ -308,6 +378,13 @@ function makeRoom(
   rugBorder.scale.set(1.1, 0.72, 1);
   rugBorder.position.set(0, 0.2, 0.15);
   group.add(rugBorder);
+  const rugSeal = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.27, 12), gold);
+  rugSeal.rotation.x = -Math.PI / 2;
+  rugSeal.position.set(0, 0.205, 0.15);
+  group.add(rugSeal);
+  const rugDiamond = box(0.075, 0.018, 0.34, gold, 0, 0.21, 0.15);
+  rugDiamond.rotation.y = Math.PI / 4;
+  group.add(rugDiamond);
   const t = room.template;
   if (
     ["conservatory", "gallery", "observatory", "nursery", "ballroom"].includes(
@@ -629,6 +706,8 @@ function makeRoom(
       );
       water.rotation.x = -Math.PI / 2;
       water.position.set(0, 0.2, 1.25);
+      water.userData.waterSurface = true;
+      water.userData.baseY = water.position.y;
       group.add(water);
     }
   } else if (t === "funeral") {
@@ -672,6 +751,8 @@ function makeRoom(
         new THREE.MeshBasicMaterial({ color: 0xffbd65 }),
       );
       flame.position.set(-0.35 + i * 0.35, 1.39, 0);
+      flame.userData.flame = true;
+      flames.push(flame);
       group.add(flame);
     }
   }
@@ -752,6 +833,8 @@ function makeRoom(
         new THREE.MeshBasicMaterial({ color: 0xffcf7f }),
       );
       flame.position.set(x, h - 0.66, z);
+      flame.userData.flame = true;
+      flames.push(flame);
       chandelier.add(flame);
     }
     group.add(chandelier);
@@ -797,11 +880,11 @@ export default function Stage({
     const el = mount.current;
     if (!el) return;
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x101319);
-    scene.fog = new THREE.Fog(0x101319, 24, 68);
+    scene.background = new THREE.Color(0x151719);
+    scene.fog = new THREE.Fog(0x151719, 28, 78);
     const tableSurface = new THREE.Mesh(
       new THREE.PlaneGeometry(220, 220),
-      new THREE.MeshStandardMaterial({ color: 0x111116, roughness: 0.97 }),
+      feltMaterial,
     );
     tableSurface.rotation.x = -Math.PI / 2;
     tableSurface.position.y = -0.54;
@@ -823,18 +906,34 @@ export default function Stage({
       "aria-label",
       "Haunted house room. Use WASD or arrow keys to walk, drag to look, and scroll to zoom.",
     );
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    const coarsePointer =
+      typeof matchMedia !== "undefined" &&
+      matchMedia("(pointer: coarse)").matches;
+    const deviceMemory =
+      (navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4;
+    const qualityScale = deviceMemory <= 4 || coarsePointer ? 1.15 : 1.5;
+    renderer.setPixelRatio(Math.min(devicePixelRatio, qualityScale));
     renderer.setSize(el.clientWidth, el.clientHeight);
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = deviceMemory > 2;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.12;
+    renderer.toneMappingExposure = 1.08;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     el.appendChild(renderer.domElement);
-    scene.add(new THREE.HemisphereLight(0x8b9aa8, 0x281b18, 1.45));
-    const key = new THREE.DirectionalLight(0xffd49a, 2.15);
+    scene.add(new THREE.HemisphereLight(0xaab3b9, 0x251916, 1.12));
+    const fill = new THREE.DirectionalLight(0x8da1b5, 0.48);
+    fill.position.set(7, 8, -9);
+    scene.add(fill);
+    const key = new THREE.DirectionalLight(0xffd49a, 2.05);
     key.position.set(-8, 14, 8);
-    key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
+    key.castShadow = renderer.shadowMap.enabled;
+    key.shadow.mapSize.set(
+      coarsePointer ? 512 : 1024,
+      coarsePointer ? 512 : 1024,
+    );
+    key.shadow.bias = -0.00018;
+    key.shadow.normalBias = 0.025;
+    key.shadow.radius = 3;
     scene.add(key);
     const mansion = new THREE.Group();
     scene.add(mansion);
@@ -846,6 +945,7 @@ export default function Stage({
     let pointerDirty = false,
       pointerOnCanvas = false;
     let hoveredWall: THREE.Object3D | null = null;
+    let hoveredDoor: THREE.Mesh | null = null;
     const gap = 5.3;
     const bounds = {
       minX: Math.min(...state.rooms.map((r) => r.x)),
@@ -857,6 +957,17 @@ export default function Stage({
     const boardD = (bounds.maxZ - bounds.minZ) * gap + 6.2;
     const boardX = ((bounds.maxX + bounds.minX) / 2) * gap;
     const boardZ = ((bounds.maxZ + bounds.minZ) / 2) * gap;
+    const shadowExtent = Math.max(boardW, boardD) * 0.65;
+    key.shadow.camera.left = -shadowExtent;
+    key.shadow.camera.right = shadowExtent;
+    key.shadow.camera.top = shadowExtent;
+    key.shadow.camera.bottom = -shadowExtent;
+    key.shadow.camera.near = 0.5;
+    key.shadow.camera.far = 48;
+    key.shadow.camera.updateProjectionMatrix();
+    key.position.set(boardX - 8, 14, boardZ + 8);
+    key.target.position.set(boardX, 0, boardZ);
+    scene.add(key.target);
     mansion.add(
       box(
         boardW,
@@ -886,6 +997,28 @@ export default function Stage({
         boardZ,
       ),
     );
+    const railZ = boardD / 2 - 0.19;
+    const railX = boardW / 2 - 0.19;
+    mansion.add(
+      box(boardW - 0.08, 0.14, 0.34, wood, boardX, 0.045, boardZ - railZ),
+      box(boardW - 0.08, 0.14, 0.34, wood, boardX, 0.045, boardZ + railZ),
+      box(0.34, 0.14, boardD - 0.72, wood, boardX - railX, 0.045, boardZ),
+      box(0.34, 0.14, boardD - 0.72, wood, boardX + railX, 0.045, boardZ),
+      box(boardW - 0.26, 0.025, 0.035, gold, boardX, 0.112, boardZ - railZ),
+      box(boardW - 0.26, 0.025, 0.035, gold, boardX, 0.112, boardZ + railZ),
+      box(0.035, 0.025, boardD - 0.9, gold, boardX - railX, 0.112, boardZ),
+      box(0.035, 0.025, boardD - 0.9, gold, boardX + railX, 0.112, boardZ),
+    );
+    for (const x of [boardX - railX, boardX + railX])
+      for (const z of [boardZ - railZ, boardZ + railZ]) {
+        const rosette = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.17, 0.17, 0.055, 12),
+          gold,
+        );
+        rosette.position.set(x, 0.135, z);
+        rosette.castShadow = true;
+        mansion.add(rosette);
+      }
     const floorY = (f: number) => (f === 0 ? 0 : f === 1 ? 5 : -5);
     const coords = (r: any) =>
       new THREE.Vector3(r.x * gap, floorY(r.floor), r.y * gap);
@@ -987,12 +1120,15 @@ export default function Stage({
     const body = new THREE.Mesh(torsoShape, outfit);
     body.position.y = 0.63;
     avatar.add(body);
+    const arms: THREE.Mesh[] = [];
+    const legs: THREE.Mesh[] = [];
     for (const side of [-1, 1]) {
       const leg = new THREE.Mesh(
         new THREE.CylinderGeometry(0.075, 0.09, 0.38, 7),
         new THREE.MeshStandardMaterial({ color: 0x29262a, roughness: 0.9 }),
       );
       leg.position.set(side * 0.12, 0.2, 0.015);
+      legs.push(leg);
       avatar.add(leg);
       const arm = new THREE.Mesh(
         new THREE.CapsuleGeometry(0.075, 0.34, 3, 6),
@@ -1000,6 +1136,7 @@ export default function Stage({
       );
       arm.position.set(side * 0.29, 0.68, 0.02);
       arm.rotation.z = side * -0.18;
+      arms.push(arm);
       avatar.add(arm);
       const boot = new THREE.Mesh(
         new THREE.BoxGeometry(0.17, 0.11, 0.28),
@@ -1012,12 +1149,61 @@ export default function Stage({
     collar.position.set(0, 0.98, 0.02);
     collar.rotation.y = Math.PI / 4;
     avatar.add(collar);
+    const characterAccent: Record<string, number> = {
+      ada: 0x93a7a2,
+      mara: 0x9c6f72,
+      eli: 0xb68c53,
+      iona: 0x9a7374,
+      silas: 0x9d8caf,
+      theo: 0x87946d,
+    };
+    const scarf = new THREE.Mesh(
+      new THREE.BoxGeometry(0.15, 0.48, 0.035),
+      new THREE.MeshStandardMaterial({
+        color: characterAccent[p.id] || 0xb08b5d,
+        roughness: 0.72,
+      }),
+    );
+    scarf.position.set(-0.09, 0.72, 0.255);
+    scarf.rotation.z = -0.12;
+    avatar.add(scarf);
+    const buttonMaterial = new THREE.MeshStandardMaterial({
+      color: 0xc5a45f,
+      metalness: 0.55,
+      roughness: 0.42,
+    });
+    for (const y of [0.52, 0.67, 0.82]) {
+      const button = new THREE.Mesh(
+        new THREE.SphereGeometry(0.026, 8, 6),
+        buttonMaterial,
+      );
+      button.position.set(0.075, y, 0.265);
+      avatar.add(button);
+    }
     const head = new THREE.Mesh(
       new THREE.SphereGeometry(0.21, 10, 8),
       new THREE.MeshStandardMaterial({ color: 0xe1cba8 }),
     );
     head.position.y = 1.18;
     avatar.add(head);
+    const faceInk = new THREE.MeshStandardMaterial({
+      color: 0x342725,
+      roughness: 0.9,
+    });
+    for (const x of [-0.067, 0.067]) {
+      const eye = new THREE.Mesh(
+        new THREE.SphereGeometry(0.022, 7, 5),
+        faceInk,
+      );
+      eye.position.set(x, 1.21, 0.187);
+      avatar.add(eye);
+    }
+    const nose = new THREE.Mesh(
+      new THREE.SphereGeometry(0.032, 7, 5),
+      new THREE.MeshStandardMaterial({ color: 0xc49f84, roughness: 0.92 }),
+    );
+    nose.position.set(0, 1.15, 0.205);
+    avatar.add(nose);
     const hair = new THREE.MeshStandardMaterial({
       color: p.id === "silas" ? 0x18181c : 0x30231e,
       roughness: 0.9,
@@ -1093,12 +1279,14 @@ export default function Stage({
     mansion.add(avatar);
     // hover details and dust motes
     const dustGeo = new THREE.BufferGeometry();
-    const dustCount = 120;
+    const dustCount = deviceMemory <= 2 ? 56 : 112;
     const pos = new Float32Array(dustCount * 3);
+    const dustDrift = new Float32Array(dustCount);
     for (let i = 0; i < dustCount; i++) {
       pos[i * 3] = (Math.random() - 0.5) * 24;
       pos[i * 3 + 1] = Math.random() * 8;
       pos[i * 3 + 2] = (Math.random() - 0.5) * 24;
+      dustDrift[i] = 0.035 + Math.random() * 0.07;
     }
     dustGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     const dust = new THREE.Points(
@@ -1111,7 +1299,10 @@ export default function Stage({
       }),
     );
     scene.add(dust);
-    let target = new THREE.Vector3(cp.x, 1, cp.z);
+    let target =
+      state.mode === "dollhouse"
+        ? new THREE.Vector3(boardX, 0, boardZ)
+        : new THREE.Vector3(cp.x, 1, cp.z);
     let angle = drag.current.theta;
     let phi = drag.current.phi;
     const extentX =
@@ -1132,6 +1323,12 @@ export default function Stage({
       view.current = { mode: state.mode, zoom };
     };
     view.current = { mode: state.mode, zoom };
+    camera.position.set(
+      target.x + zoom * Math.sin(phi) * Math.sin(angle),
+      target.y + zoom * Math.cos(phi),
+      target.z + zoom * Math.sin(phi) * Math.cos(angle),
+    );
+    camera.lookAt(target);
     let alive = true;
     let raf = 0;
     const clock = new THREE.Clock();
@@ -1217,12 +1414,30 @@ export default function Stage({
         else velocityZ = 0;
         avatar.position.set(cp.x + walk.current.x, cp.y, cp.z + walk.current.z);
         const pace = Math.hypot(velocityX, velocityZ);
+        const gait = Math.min(1, pace / 1.25);
+        const stride = Math.sin(clock.elapsedTime * 10.5) * gait;
         avatar.position.y =
-          cp.y + (pace > 0.1 ? Math.sin(clock.elapsedTime * 11) * 0.025 : 0);
-        if (pace > 0.08) avatar.rotation.y = Math.atan2(velocityX, velocityZ);
+          cp.y +
+          Math.sin(clock.elapsedTime * 21) * 0.014 * gait +
+          Math.sin(clock.elapsedTime * 1.8) * 0.012;
+        body.rotation.z = Math.sin(clock.elapsedTime * 5.2) * 0.018 * gait;
+        arms[0].rotation.x = stride * 0.38;
+        arms[1].rotation.x = -stride * 0.38;
+        legs[0].rotation.x = -stride * 0.48;
+        legs[1].rotation.x = stride * 0.48;
+        if (pace > 0.08) {
+          avatar.rotation.y = Math.atan2(velocityX, velocityZ);
+          pointerDirty = true;
+        }
       } else {
         velocityX = 0;
         velocityZ = 0;
+        avatar.position.y = cp.y + Math.sin(clock.elapsedTime * 1.8) * 0.012;
+        body.rotation.z = 0;
+        arms[0].rotation.x = Math.sin(clock.elapsedTime * 1.4) * 0.025;
+        arms[1].rotation.x = -Math.sin(clock.elapsedTime * 1.4) * 0.025;
+        legs[0].rotation.x = 0;
+        legs[1].rotation.x = 0;
       }
       if (state.mode === "explore") {
         const desired = new THREE.Vector3(
@@ -1230,15 +1445,19 @@ export default function Stage({
           1.15,
           cp.z + walk.current.z,
         );
-        target.lerp(desired, 0.07);
-      } else target.lerp(new THREE.Vector3(0, 0, 0), 0.04);
+        target.lerp(desired, 1 - Math.exp(-4.3 * dt));
+      } else
+        target.lerp(
+          new THREE.Vector3(boardX, 0, boardZ),
+          1 - Math.exp(-2.45 * dt),
+        );
       const r = zoom;
       const desiredCam = new THREE.Vector3(
         target.x + r * Math.sin(phi) * Math.sin(angle),
         target.y + r * Math.cos(phi),
         target.z + r * Math.sin(phi) * Math.cos(angle),
       );
-      camera.position.lerp(desiredCam, 0.045);
+      camera.position.lerp(desiredCam, 1 - Math.exp(-2.75 * dt));
       camera.lookAt(target);
       if (pointerDirty || drag.current.active) {
         if (pointerOnCanvas) {
@@ -1249,14 +1468,42 @@ export default function Stage({
             .intersectObjects(cutawayMeshes, false)
             .find((i) => i.object.visible && i.object.scale.y > 0.08);
           hoveredWall = hit?.object || null;
-        } else hoveredWall = null;
+          const doorHit = raycaster
+            .intersectObjects(doorMeshes, false)
+            .find((i) => i.object.userData.roomId === activeRoomId);
+          const nextDoor = (doorHit?.object as THREE.Mesh) || null;
+          if (hoveredDoor && hoveredDoor !== nextDoor) {
+            const previous = hoveredDoor.material as THREE.MeshBasicMaterial;
+            previous.colorWrite = false;
+            previous.opacity = 0;
+          }
+          if (nextDoor) {
+            const material = nextDoor.material as THREE.MeshBasicMaterial;
+            material.color.setHex(
+              nextDoor.userData.doorTarget ? 0xe3c27f : 0x9ccfd0,
+            );
+            material.opacity = 0.16;
+            material.colorWrite = true;
+          }
+          hoveredDoor = nextDoor;
+          renderer.domElement.style.cursor = nextDoor ? "pointer" : "grab";
+        } else {
+          hoveredWall = null;
+          if (hoveredDoor) {
+            const previous = hoveredDoor.material as THREE.MeshBasicMaterial;
+            previous.colorWrite = false;
+            previous.opacity = 0;
+          }
+          hoveredDoor = null;
+          renderer.domElement.style.cursor = "grab";
+        }
         pointerDirty = false;
       }
       for (const roomGroup of roomsById.values()) {
         if (roomGroup.userData.revealScale) {
           const nextScale =
             roomGroup.userData.revealScale +
-            (1 - roomGroup.userData.revealScale) * 0.075;
+            (1 - roomGroup.userData.revealScale) * (1 - Math.exp(-4.7 * dt));
           roomGroup.userData.revealScale = nextScale > 0.985 ? 0 : nextScale;
           roomGroup.scale.setScalar(roomGroup.userData.revealScale || 1);
         }
@@ -1270,17 +1517,28 @@ export default function Stage({
             : dz > 0
               ? "south"
               : "north";
+        const roomFlames = roomGroup.userData.flames as
+          THREE.Object3D[] | undefined;
+        roomFlames?.forEach((flame, index) => {
+          const shimmer =
+            1 + Math.sin(clock.elapsedTime * 9 + index * 2.1) * 0.075;
+          flame.scale.set(shimmer * 0.92, shimmer, shimmer * 0.92);
+        });
         for (const part of roomGroup.children) {
+          if (part.userData.waterSurface)
+            part.position.y =
+              part.userData.baseY +
+              Math.sin(clock.elapsedTime * 1.25 + roomGroup.position.x) * 0.012;
           if (part.userData.spirit) {
             part.position.y =
               part.userData.baseY +
               Math.sin(clock.elapsedTime * 1.4 + roomGroup.position.x) * 0.12;
-            part.rotation.y += 0.006;
+            part.rotation.y += 0.36 * dt;
           }
           if (part.userData.roomLight && part instanceof THREE.PointLight)
             part.intensity =
-              1.2 +
-              Math.sin(clock.elapsedTime * 4.2 + roomGroup.position.z) * 0.12;
+              1.22 +
+              Math.sin(clock.elapsedTime * 3.6 + roomGroup.position.z) * 0.09;
           const cut = part.userData.cutaway as
             { side: string; baseY: number; height: number } | undefined;
           if (!cut) continue;
@@ -1289,13 +1547,21 @@ export default function Stage({
             cut.side === frontSide ||
             part === hoveredWall;
           const foldedScale = shouldFold ? 0.025 : 1;
-          const foldEase = state.settings.reducedMotion ? 1 : 0.16;
+          const foldEase = state.settings.reducedMotion
+            ? 1
+            : 1 - Math.exp(-10.4 * dt);
           part.scale.y += (foldedScale - part.scale.y) * foldEase;
           part.position.y = cut.baseY - (cut.height * (1 - part.scale.y)) / 2;
           part.visible = part.scale.y > 0.035;
         }
       }
-      dust.rotation.y += 0.0003;
+      for (let i = 0; i < dustCount; i++) {
+        const k = i * 3;
+        pos[k + 1] += dustDrift[i] * dt;
+        pos[k] += Math.sin(clock.elapsedTime * 0.35 + i) * dt * 0.012;
+        if (pos[k + 1] > 8) pos[k + 1] = 0;
+      }
+      dustGeo.attributes.position.needsUpdate = true;
       renderer.render(scene, camera);
     };
     animate();
