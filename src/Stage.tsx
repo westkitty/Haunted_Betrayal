@@ -210,6 +210,54 @@ function addPortrait(group: THREE.Group, x: number, y: number, index: number) {
   crest.position.set(x, y + 0.445, -1.91);
   group.add(crest);
 }
+function addDiscoveryBurst(room: THREE.Group, color: number) {
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.3, 0.34, 28),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.72,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = ROOM_FLOOR_TOP + 0.025;
+  ring.castShadow = false;
+  ring.receiveShadow = false;
+  room.add(ring);
+  const count = 12;
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2;
+    const radius = 0.18 + (i % 3) * 0.035;
+    positions[i * 3] = Math.cos(angle) * radius;
+    positions[i * 3 + 1] = ROOM_FLOOR_TOP + 0.06 + (i % 4) * 0.035;
+    positions[i * 3 + 2] = Math.sin(angle) * radius;
+    velocities[i * 3] = Math.cos(angle) * (0.3 + (i % 3) * 0.1);
+    velocities[i * 3 + 1] = 0.55 + (i % 4) * 0.1;
+    velocities[i * 3 + 2] = Math.sin(angle) * (0.3 + (i % 3) * 0.1);
+  }
+  const geometry = new THREE.BufferGeometry();
+  const position = new THREE.BufferAttribute(positions, 3);
+  position.setUsage(THREE.DynamicDrawUsage);
+  geometry.setAttribute("position", position);
+  const sparks = new THREE.Points(
+    geometry,
+    new THREE.PointsMaterial({
+      color,
+      size: 0.065,
+      transparent: true,
+      opacity: 0.82,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  sparks.frustumCulled = false;
+  room.add(sparks);
+  room.userData.discoveryBurst = { ring, sparks, velocities, age: 0 };
+}
 floorMat.map = makePatternTexture("#4b352e", "#82664b", true);
 const grainCanvas = document.createElement("canvas");
 grainCanvas.width = 256;
@@ -1145,7 +1193,8 @@ export default function Stage({
     const coords = (r: any) =>
       new THREE.Vector3(r.x * gap, floorY(r.floor), r.y * gap);
     const activeRoomId = state.players[state.current].roomId;
-    if (knownSeed.current !== state.seed) {
+    const freshExpedition = knownSeed.current !== state.seed;
+    if (freshExpedition) {
       knownRooms.current.clear();
       knownSeed.current = state.seed;
     }
@@ -1169,6 +1218,8 @@ export default function Stage({
       if (!knownRooms.current.has(r.id) && !state.settings.reducedMotion) {
         g.scale.setScalar(0.015);
         g.userData.revealScale = 0.015;
+        if (!freshExpedition)
+          addDiscoveryBurst(g, r.haunted ? 0x8fd6d1 : 0xe3c27f);
       }
       knownRooms.current.add(r.id);
       roomsById.set(r.id, g);
@@ -1659,6 +1710,41 @@ export default function Stage({
             (1 - roomGroup.userData.revealScale) * (1 - Math.exp(-4.7 * dt));
           roomGroup.userData.revealScale = nextScale > 0.985 ? 0 : nextScale;
           roomGroup.scale.setScalar(roomGroup.userData.revealScale || 1);
+        }
+        const fx = roomGroup.userData.discoveryBurst as
+          | {
+              ring: THREE.Mesh;
+              sparks: THREE.Points;
+              velocities: Float32Array;
+              age: number;
+            }
+          | undefined;
+        if (fx) {
+          fx.age += dt;
+          const life = Math.min(1, fx.age / 1.35);
+          fx.ring.scale.setScalar(0.45 + life * 1.5);
+          (fx.ring.material as THREE.MeshBasicMaterial).opacity =
+            0.72 * (1 - life);
+          const sparkMaterial = fx.sparks.material as THREE.PointsMaterial;
+          sparkMaterial.opacity = 0.82 * (1 - life);
+          const sparkPosition = fx.sparks.geometry.attributes
+            .position as THREE.BufferAttribute;
+          const values = sparkPosition.array as Float32Array;
+          for (let i = 0; i < values.length; i += 3) {
+            fx.velocities[i + 1] -= 0.85 * dt;
+            values[i] += fx.velocities[i] * dt;
+            values[i + 1] += fx.velocities[i + 1] * dt;
+            values[i + 2] += fx.velocities[i + 2] * dt;
+          }
+          sparkPosition.needsUpdate = true;
+          if (life >= 1) {
+            roomGroup.remove(fx.ring, fx.sparks);
+            fx.ring.geometry.dispose();
+            (fx.ring.material as THREE.Material).dispose();
+            fx.sparks.geometry.dispose();
+            (fx.sparks.material as THREE.Material).dispose();
+            roomGroup.userData.discoveryBurst = undefined;
+          }
         }
         const dx = camera.position.x - roomGroup.position.x;
         const dz = camera.position.z - roomGroup.position.z;
