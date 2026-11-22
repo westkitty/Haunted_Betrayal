@@ -58,7 +58,9 @@ function App() {
   });
   const [audio, setAudio] = useState(false);
   const [master, setMaster] = useState(0.35);
-  const [reduced, setReduced] = useState(false);
+  const [reduced, setReduced] = useState(
+    () => loadGame()?.settings.reducedMotion ?? false,
+  );
   const [importMessage, setImportMessage] = useState("");
   const [seed, setSeed] = useState("");
   const [showJournal, setShowJournal] = useState(false);
@@ -90,6 +92,17 @@ function App() {
       }
     }
   }, [game]);
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setShowExplorer(false);
+      setShowHouse(false);
+      setShowJournal(false);
+      if (screen === "settings") setScreen(game ? "play" : "menu");
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [screen, game]);
   const start = () => {
     const s = newGame(
       seed ? Number(seed) : Math.floor(Math.random() * 0x7fffffff),
@@ -103,6 +116,7 @@ function App() {
     const s = loadGame();
     if (s) {
       setGame(s);
+      setReduced(s.settings.reducedMotion);
       setScreen("play");
     }
   };
@@ -213,7 +227,15 @@ function App() {
         </button>
         <button
           className="setting-row button-row"
-          onClick={() => setReduced(!reduced)}
+          onClick={() => {
+            const next = !reduced;
+            setReduced(next);
+            setGame((g) =>
+              g
+                ? { ...g, settings: { ...g.settings, reducedMotion: next } }
+                : g,
+            );
+          }}
         >
           <span>
             <Eye /> Reduced motion
@@ -643,7 +665,13 @@ function App() {
           <Suspense
             fallback={<div className="stage-loading">The house is waking…</div>}
           >
-            <Stage state={game} onMove={(id) => update("move", id)} />
+            <Stage
+              state={game}
+              onMove={(id) => update("move", id)}
+              onToggleMode={() => update("toggle-map")}
+              onExplore={() => update("explore")}
+              onSearch={() => update("search")}
+            />
           </Suspense>
           <div className="action-bar">
             <div className="action-count">
