@@ -1,0 +1,17 @@
+{
+  "name": "city-that-folds-at-dusk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A playable isometric simulation of a mechanized city block that folds itself into a thermal shell at dusk.",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/test.js && node tests/dom-smoke.js",
+    "sim": "node tests/test.js",
+    "dom": "node tests/dom-smoke.js",
+    "shots": "node tests/shots.js"
+  },
+  "optionalDependencies": {
+    "@napi-rs/canvas": "^0.1.60"
+  },
+  "license": "MIT"
+}
